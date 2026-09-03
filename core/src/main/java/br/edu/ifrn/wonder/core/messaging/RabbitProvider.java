@@ -13,11 +13,19 @@ public class RabbitProvider {
 	}
 
 	public void sendNotification(String message) {
-		rabbitTemplate.convertAndSend(RabbitConfig.NOTIFICATION_QUEUE, message);
+		rabbitTemplate.convertAndSend(
+				RabbitConfig.EXCHANGE,
+				RabbitConfig.NOTIFICATION_ROUTING_KEY,
+				message
+		);
 	}
 
 	public void sendReportGenerationJob(String message) {
-		rabbitTemplate.convertAndSend(RabbitConfig.REPORT_GENERATION_QUEUE, message);
+		rabbitTemplate.convertAndSend(
+				RabbitConfig.EXCHANGE,
+				RabbitConfig.REPORT_GENERATION_ROUTING_KEY,
+				message
+		);
 	}
 
 }
