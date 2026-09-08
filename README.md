@@ -94,10 +94,10 @@ Se atente aos hosts. Rodando local, troque os valores das váriaveis `POSTGRES_H
 
 ### 6.2. Subir a infraestrutura
 
-Use o `.env.dev` para iniciar apenas PostgreSQL e RabbitMQ:
+Use o `compose.dev.yaml` com o `.env.dev` para iniciar apenas PostgreSQL e RabbitMQ:
 
 ```bash
-docker compose --env-file .env.dev up -d postgres rabbitmq
+docker compose -f compose.dev.yaml --env-file .env.dev up -d
 ```
 
 ### 6.3. Criar as configurações de execução
@@ -122,7 +122,7 @@ Inicie as três aplicações. O `core` ficará disponível em `http://localhost:
 Para encerrar somente a infraestrutura:
 
 ```bash
-docker compose --env-file .env.dev down
+docker compose -f compose.dev.yaml --env-file .env.dev down
 ```
 
 ## 7. Executar pelo Docker Compose
