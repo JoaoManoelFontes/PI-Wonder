@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN ./mvnw -pl core -am clean package -DskipTests
+RUN sed -i 's/\r$//' mvnw && chmod +x mvnw && ./mvnw -pl core -am clean package -DskipTests
 
 FROM eclipse-temurin:21-jre
 

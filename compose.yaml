@@ -1,4 +1,5 @@
 services:
+#  ===============Apps===============
   core:
     build:
       context: .
@@ -36,6 +37,7 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  #  ===============DB===============
   postgres:
     image: postgres:15
     restart: unless-stopped
@@ -55,6 +57,7 @@ services:
       timeout: 5s
       retries: 5
 
+  #  ===============Message Broker===============
   rabbitmq:
     image: rabbitmq:3-management
     restart: unless-stopped
