@@ -19,20 +19,14 @@
       },
       {
         "name": "ADMIN",
+
         "description": "Administrador da plataforma Wonder"
       }
     ]
   },
-  "defaultRole": {
-    "name": "default-roles-wonder",
-    "description": "${role_default-roles}",
-    "composite": true,
-    "composites": {
-      "realm": [
-        "CUSTOMER"
-      ]
-    }
-  },
+  "defaultRoles": [
+    "CUSTOMER"
+  ],
   "clients": [
     {
       "clientId": "wonder-web",
