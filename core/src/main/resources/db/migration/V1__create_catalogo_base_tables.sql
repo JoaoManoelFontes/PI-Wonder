@@ -38,7 +38,7 @@ CREATE TABLE prestadores (
     motivo_rejeicao TEXT,
     foto_url VARCHAR(500),
 
-    criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    criado_em TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     atualizado_em TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT fk_prestadores_perfil_usuario FOREIGN KEY (perfil_usuario_id) REFERENCES perfis_usuarios(id)

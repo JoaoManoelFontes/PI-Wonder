@@ -3,6 +3,8 @@ package br.edu.ifrn.wonder.core.domain;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.Instant;
+
 @Getter
 @Setter
 @Builder
@@ -29,4 +31,22 @@ public class Categoria {
 
     @Column(name = "foto_url", length = 500)
     private String fotoUrl;
+
+    @Column(name = "criado_em", nullable = false, updatable = false)
+    private Instant criadoEm;
+
+    @Column(name = "atualizado_em", nullable = false)
+    private Instant atualizadoEm;
+
+    @PrePersist
+    protected void onCreate() {
+        Instant agora = Instant.now();
+        criadoEm = agora;
+        atualizadoEm = agora;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        atualizadoEm = Instant.now();
+    }
 }

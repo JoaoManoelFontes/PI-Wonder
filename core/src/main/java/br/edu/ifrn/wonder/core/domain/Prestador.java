@@ -3,6 +3,7 @@ package br.edu.ifrn.wonder.core.domain;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 @Getter
@@ -64,7 +65,21 @@ public class Prestador {
     @Column(name = "foto_url", length = 500)
     private String fotoUrl;
 
-    @Builder.Default
-    @Column(name = "criado_em", nullable = false)
-    private LocalDateTime criadoEm = LocalDateTime.now();
+    @Column(name = "criado_em", nullable = false, updatable = false)
+    private Instant criadoEm;
+
+    @Column(name = "atualizado_em", nullable = false)
+    private Instant atualizadoEm;
+
+    @PrePersist
+    protected void onCreate() {
+        Instant agora = Instant.now();
+        criadoEm = agora;
+        atualizadoEm = agora;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        atualizadoEm = Instant.now();
+    }
 }
