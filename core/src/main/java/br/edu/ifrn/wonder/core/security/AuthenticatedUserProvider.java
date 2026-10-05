@@ -1,7 +1,9 @@
 package br.edu.ifrn.wonder.core.security;
 
 import java.util.Optional;
+import java.util.UUID;
 
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -14,6 +16,14 @@ public class AuthenticatedUserProvider {
 
     public String getUserId() {
         return getJwt().getSubject();
+    }
+
+    public UUID getUserUuid() {
+        try {
+            return UUID.fromString(getUserId());
+        } catch (IllegalArgumentException exception) {
+            throw new BadCredentialsException("Invalid JWT subject", exception);
+        }
     }
 
     public Optional<String> getEmail() {
