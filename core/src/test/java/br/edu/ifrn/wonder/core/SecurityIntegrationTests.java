@@ -1,5 +1,6 @@
 package br.edu.ifrn.wonder.core;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -7,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,13 +24,20 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import br.edu.ifrn.wonder.core.repository.PerfilUsuarioRepository;
+
 @Import({TestcontainersConfiguration.class, SecurityIntegrationTests.TestController.class})
 @SpringBootTest
 @AutoConfigureMockMvc
 class SecurityIntegrationTests {
 
+    private static final UUID KEYCLOAK_ID = UUID.fromString("8f46b3b8-8239-4659-8e62-c7cd5b8d56c1");
+
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private PerfilUsuarioRepository perfilUsuarioRepository;
 
     @Test
     void shouldAllowActuatorHealthWithoutJwt() throws Exception {
@@ -62,10 +71,30 @@ class SecurityIntegrationTests {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void deveCriarERetornarPerfilDoUsuarioAutenticado() throws Exception {
+        mockMvc.perform(get("/me").with(wonderJwt(KEYCLOAK_ID.toString())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").isNotEmpty())
+                .andExpect(jsonPath("$.keycloak_id").value(KEYCLOAK_ID.toString()))
+                .andExpect(jsonPath("$.foto_url").isEmpty())
+                .andExpect(jsonPath("$.numero_telefone").isEmpty());
+
+        mockMvc.perform(get("/me").with(wonderJwt(KEYCLOAK_ID.toString())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.keycloak_id").value(KEYCLOAK_ID.toString()));
+
+        assertThat(perfilUsuarioRepository.count()).isOne();
+    }
+
     private JwtRequestPostProcessor wonderJwt() {
+        return wonderJwt("keycloak-user-id");
+    }
+
+    private JwtRequestPostProcessor wonderJwt(String keycloakId) {
         return jwt()
                 .jwt(jwt -> jwt
-                        .subject("keycloak-user-id")
+                        .subject(keycloakId)
                         .claim("email", "customer@wonder.dev")
                         .claim("realm_access", Map.of("roles", List.of("CUSTOMER"))))
                 .authorities(new SimpleGrantedAuthority("ROLE_CUSTOMER"));

@@ -1,14 +1,15 @@
-package br.edu.ifrn.wonder.core.catalogo.dto;
+package br.edu.ifrn.wonder.core.dto;
 
+import java.util.UUID;
+
+import br.edu.ifrn.wonder.core.domain.Prestador;
+import br.edu.ifrn.wonder.core.domain.StatusPrestador;
 import com.fasterxml.jackson.annotation.JsonProperty;
-
-import br.edu.ifrn.wonder.core.catalogo.domain.Prestador;
-import br.edu.ifrn.wonder.core.catalogo.domain.StatusPrestador;
 
 public record PrestadorPublicResponse(
         Long id,
-        @JsonProperty("usuario_id")
-        Long usuarioId,
+        @JsonProperty("perfil_usuario_id")
+        UUID perfilUsuarioId,
         @JsonProperty("nome_estab")
         String nomeEstab,
         String documento,
@@ -26,7 +27,7 @@ public record PrestadorPublicResponse(
     public static PrestadorPublicResponse from(Prestador prestador) {
         return new PrestadorPublicResponse(
                 prestador.getId(),
-                prestador.getUsuarioId(),
+                prestador.getPerfilUsuario().getId(),
                 prestador.getNomeEstab(),
                 prestador.getDocumento(),
                 prestador.getEndereco(),
