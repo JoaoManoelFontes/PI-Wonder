@@ -1,7 +1,6 @@
 package br.edu.ifrn.wonder.core.controller;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -17,9 +16,8 @@ public class PerfilUsuarioController {
     private final UsuarioAutenticadoProvider usuarioAutenticadoProvider;
     private final PerfilUsuarioService perfilUsuarioService;
 
-    @PreAuthorize("hasRole('CUSTOMER')")
     @GetMapping("/me")
-    PerfilUsuarioResponse buscarMeuPerfil() {
+    PerfilUsuarioResponse getUserProfile() {
         PerfilUsuario perfilUsuario = perfilUsuarioService.buscarOuCriarPorKeycloakId(
                 usuarioAutenticadoProvider.getUuidUsuario()
         );

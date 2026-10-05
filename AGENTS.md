@@ -101,7 +101,16 @@ Responsabilidades conhecidas incluem:
 * métricas e observabilidade;
 * demais regras de negócio principais.
 
-Dentro do `core`, organize funcionalidades por domínio/package coeso.
+Dentro de cada módulo, organize o código por camadas técnicas, seguindo a estrutura convencional do Spring:
+
+* `controller`
+* `service`
+* `repository`
+* `dto`
+* `model`/`entity`
+* demais camadas necessárias ao módulo.
+
+Não organize os módulos internos por domínio como estrutura principal.
 
 Não transforme cada domínio interno em um serviço separado sem uma necessidade real.
 
@@ -230,6 +239,8 @@ O ambiente local deve continuar executável através do Docker Compose.
 Antes de criar algo novo, procure por uma implementação ou padrão semelhante no projeto.
 
 Siga nomes, estrutura e convenções já existentes.
+
+Use nomes de variáveis em português do Brasil, mantendo clareza e consistência com o domínio do Wonder.
 
 Prefira:
 
