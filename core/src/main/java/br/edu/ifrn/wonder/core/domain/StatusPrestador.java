@@ -1,4 +1,4 @@
-package br.edu.ifrn.wonder.core.catalogo.domain;
+package br.edu.ifrn.wonder.core.domain;
 
 public enum StatusPrestador {
     RASCUNHO,

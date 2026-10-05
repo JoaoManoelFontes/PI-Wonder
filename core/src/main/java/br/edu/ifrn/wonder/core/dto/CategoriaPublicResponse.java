@@ -1,9 +1,8 @@
-package br.edu.ifrn.wonder.core.catalogo.dto;
+package br.edu.ifrn.wonder.core.dto;
 
+import br.edu.ifrn.wonder.core.domain.Categoria;
+import br.edu.ifrn.wonder.core.domain.StatusCategoria;
 import com.fasterxml.jackson.annotation.JsonProperty;
-
-import br.edu.ifrn.wonder.core.catalogo.domain.Categoria;
-import br.edu.ifrn.wonder.core.catalogo.domain.StatusCategoria;
 
 public record CategoriaPublicResponse(
         Long id,

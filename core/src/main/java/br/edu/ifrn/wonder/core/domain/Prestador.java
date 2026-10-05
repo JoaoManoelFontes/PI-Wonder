@@ -1,20 +1,9 @@
-package br.edu.ifrn.wonder.core.catalogo.domain;
+package br.edu.ifrn.wonder.core.domain;
+
+import jakarta.persistence.*;
+import lombok.*;
 
 import java.time.LocalDateTime;
-
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 @Getter
 @Setter
@@ -29,8 +18,9 @@ public class Prestador {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "usuario_id", nullable = false, unique = true)
-    private Long usuarioId;
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "perfil_usuario_id", nullable = false, unique = true)
+    private PerfilUsuario perfilUsuario;
 
     @Column(name = "nome_estab", nullable = false)
     private String nomeEstab;

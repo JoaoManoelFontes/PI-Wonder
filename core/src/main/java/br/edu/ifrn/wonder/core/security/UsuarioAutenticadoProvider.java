@@ -12,17 +12,17 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.stereotype.Component;
 
 @Component
-public class AuthenticatedUserProvider {
+public class UsuarioAutenticadoProvider {
 
-    public String getUserId() {
+    public String getIdUsuario() {
         return getJwt().getSubject();
     }
 
-    public UUID getUserUuid() {
+    public UUID getUuidUsuario() {
         try {
-            return UUID.fromString(getUserId());
+            return UUID.fromString(getIdUsuario());
         } catch (IllegalArgumentException exception) {
-            throw new BadCredentialsException("Invalid JWT subject", exception);
+            throw new BadCredentialsException("O identificador do usuário no JWT é inválido", exception);
         }
     }
 
@@ -31,12 +31,12 @@ public class AuthenticatedUserProvider {
     }
 
     public Jwt getJwt() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        Authentication autenticacao = SecurityContextHolder.getContext().getAuthentication();
 
-        if (authentication instanceof JwtAuthenticationToken jwtAuthentication) {
-            return jwtAuthentication.getToken();
+        if (autenticacao instanceof JwtAuthenticationToken autenticacaoJwt) {
+            return autenticacaoJwt.getToken();
         }
 
-        throw new AuthenticationCredentialsNotFoundException("Authenticated JWT not found");
+        throw new AuthenticationCredentialsNotFoundException("JWT do usuário autenticado não encontrado");
     }
 }
