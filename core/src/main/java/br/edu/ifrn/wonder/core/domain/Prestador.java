@@ -50,6 +50,10 @@ public class Prestador {
     @Column(nullable = false, length = 20)
     private StatusPrestador status = StatusPrestador.RASCUNHO;
 
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean ativo = false;
+
     @Column(name = "enviado_em")
     private LocalDateTime enviadoEm;
 
