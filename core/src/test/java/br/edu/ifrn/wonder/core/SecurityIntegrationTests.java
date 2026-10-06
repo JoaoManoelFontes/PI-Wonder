@@ -73,16 +73,16 @@ class SecurityIntegrationTests {
 
     @Test
     void deveCriarERetornarPerfilDoUsuarioAutenticado() throws Exception {
-        mockMvc.perform(get("/me").with(wonderJwt(KEYCLOAK_ID.toString())))
+        mockMvc.perform(get("/perfis/eu").with(wonderJwt(KEYCLOAK_ID.toString())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").isNotEmpty())
-                .andExpect(jsonPath("$.keycloak_id").value(KEYCLOAK_ID.toString()))
-                .andExpect(jsonPath("$.foto_url").isEmpty())
-                .andExpect(jsonPath("$.numero_telefone").isEmpty());
+                .andExpect(jsonPath("$.keycloakId").value(KEYCLOAK_ID.toString()))
+                .andExpect(jsonPath("$.fotoUrl").isEmpty())
+                .andExpect(jsonPath("$.numeroTelefone").isEmpty());
 
-        mockMvc.perform(get("/me").with(wonderJwt(KEYCLOAK_ID.toString())))
+        mockMvc.perform(get("/perfis/eu").with(wonderJwt(KEYCLOAK_ID.toString())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.keycloak_id").value(KEYCLOAK_ID.toString()));
+                .andExpect(jsonPath("$.keycloakId").value(KEYCLOAK_ID.toString()));
 
         assertThat(perfilUsuarioRepository.count()).isOne();
     }
