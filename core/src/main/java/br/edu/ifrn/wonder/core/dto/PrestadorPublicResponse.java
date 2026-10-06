@@ -4,13 +4,10 @@ import java.util.UUID;
 
 import br.edu.ifrn.wonder.core.domain.Prestador;
 import br.edu.ifrn.wonder.core.domain.StatusPrestador;
-import com.fasterxml.jackson.annotation.JsonProperty;
 
 public record PrestadorPublicResponse(
         Long id,
-        @JsonProperty("perfil_usuario_id")
         UUID perfilUsuarioId,
-        @JsonProperty("nome_estab")
         String nomeEstab,
         String documento,
         String endereco,
@@ -20,7 +17,7 @@ public record PrestadorPublicResponse(
         String estado,
         String complemento,
         String status,
-        @JsonProperty("foto_url")
+        boolean ativo,
         String fotoUrl
 ) {
 
@@ -37,6 +34,7 @@ public record PrestadorPublicResponse(
                 prestador.getEstado(),
                 prestador.getComplemento(),
                 formatStatus(prestador.getStatus()),
+                prestador.isAtivo(),
                 prestador.getFotoUrl()
         );
     }
