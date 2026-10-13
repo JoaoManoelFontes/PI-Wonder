@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -79,6 +81,85 @@ class PrestadorServiceTest {
         verify(prestadorRepository, never()).save(any(Prestador.class));
     }
 
+    @Test
+    void deveListarSolicitacoesPendentes() {
+        Prestador prestador = prestadorPendente();
+
+        when(prestadorRepository.findByStatusOrderByEnviadoEmAsc(StatusPrestador.PENDENTE))
+                .thenReturn(List.of(prestador));
+
+        List<Prestador> resultado = prestadorService.listarSolicitacoesPendentes();
+
+        assertThat(resultado).containsExactly(prestador);
+    }
+
+    @Test
+    void deveDetalharSolicitacaoPendente() {
+        Prestador prestador = prestadorPendente();
+
+        when(prestadorRepository.findById(1L))
+                .thenReturn(Optional.of(prestador));
+
+        Prestador resultado = prestadorService.detalharSolicitacaoPendente(1L);
+
+        assertThat(resultado).isSameAs(prestador);
+    }
+
+    @Test
+    void deveAprovarSolicitacaoPendente() {
+        Prestador prestador = prestadorPendente();
+
+        when(prestadorRepository.findById(1L))
+                .thenReturn(Optional.of(prestador));
+
+        Prestador resultado = prestadorService.aprovarSolicitacao(1L, KEYCLOAK_ID);
+
+        assertThat(resultado.getStatus()).isEqualTo(StatusPrestador.ATIVO);
+        assertThat(resultado.isAtivo()).isTrue();
+        assertThat(resultado.getAprovadoEm()).isNotNull();
+        assertThat(resultado.getAprovadoPor()).isEqualTo(KEYCLOAK_ID.toString());
+        assertThat(resultado.getMotivoRejeicao()).isNull();
+    }
+
+    @Test
+    void deveReprovarSolicitacaoPendente() {
+        Prestador prestador = prestadorPendente();
+
+        when(prestadorRepository.findById(1L))
+                .thenReturn(Optional.of(prestador));
+
+        Prestador resultado = prestadorService.reprovarSolicitacao(1L, KEYCLOAK_ID);
+
+        assertThat(resultado.getStatus()).isEqualTo(StatusPrestador.REJEITADO);
+        assertThat(resultado.isAtivo()).isFalse();
+        assertThat(resultado.getAprovadoEm()).isNull();
+        assertThat(resultado.getAprovadoPor()).isEqualTo(KEYCLOAK_ID.toString());
+        assertThat(resultado.getMotivoRejeicao()).isNull();
+    }
+
+    @Test
+    void deveRetornarNotFoundQuandoSolicitacaoNaoExiste() {
+        when(prestadorRepository.findById(1L))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> prestadorService.detalharSolicitacaoPendente(1L))
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
+                        assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+    }
+
+    @Test
+    void deveRetornarConflictQuandoPrestadorNaoEstaPendente() {
+        Prestador prestador = prestadorPendente();
+        prestador.setStatus(StatusPrestador.ATIVO);
+
+        when(prestadorRepository.findById(1L))
+                .thenReturn(Optional.of(prestador));
+
+        assertThatThrownBy(() -> prestadorService.aprovarSolicitacao(1L, KEYCLOAK_ID))
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
+                        assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+    }
+
     private PerfilUsuario perfilUsuario() {
         PerfilUsuario perfilUsuario = new PerfilUsuario(KEYCLOAK_ID);
         ReflectionTestUtils.setField(perfilUsuario, "id", PERFIL_USUARIO_ID);
@@ -97,5 +178,21 @@ class PrestadorServiceTest {
                 "Sala 1",
                 "https://cdn.wonder.dev/studio.jpg"
         );
+    }
+
+    private Prestador prestadorPendente() {
+        return Prestador.builder()
+                .perfilUsuario(perfilUsuario())
+                .nomeEstab("Studio Wonder")
+                .documento("12345678900")
+                .endereco("Rua das Flores")
+                .numero("100")
+                .bairro("Centro")
+                .cidade("Natal")
+                .estado("RN")
+                .complemento("Sala 1")
+                .status(StatusPrestador.PENDENTE)
+                .ativo(false)
+                .build();
     }
 }
