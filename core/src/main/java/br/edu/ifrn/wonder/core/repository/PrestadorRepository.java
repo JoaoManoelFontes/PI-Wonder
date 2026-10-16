@@ -13,6 +13,12 @@ import br.edu.ifrn.wonder.core.domain.StatusPrestador;
 public interface PrestadorRepository extends JpaRepository<Prestador, Long> {
 
     @EntityGraph(attributePaths = "perfilUsuario")
+    List<Prestador> findByAtivoTrueAndStatusOrderByNomeEstabAsc(StatusPrestador status);
+
+    @EntityGraph(attributePaths = "perfilUsuario")
+    Optional<Prestador> findByIdAndAtivoTrueAndStatus(Long id, StatusPrestador status);
+
+    @EntityGraph(attributePaths = "perfilUsuario")
     Optional<Prestador> findById(Long id);
 
     Optional<Prestador> findByPerfilUsuarioId(UUID perfilUsuarioId);
