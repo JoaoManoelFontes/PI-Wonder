@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import br.edu.ifrn.wonder.core.dto.CategoriaPublicResponse;
+import br.edu.ifrn.wonder.core.dto.PrestadorPublicResponse;
 import br.edu.ifrn.wonder.core.service.CatalogoPublicoService;
 import lombok.RequiredArgsConstructor;
 
@@ -22,6 +23,14 @@ public class CatalogoPublicoController {
         return catalogoPublicoService.listarCategoriasAtivas()
                 .stream()
                 .map(CategoriaPublicResponse::from)
+                .toList();
+    }
+
+    @GetMapping("/prestadores")
+    List<PrestadorPublicResponse> listarPrestadores() {
+        return catalogoPublicoService.listarPrestadoresPublicos()
+                .stream()
+                .map(PrestadorPublicResponse::from)
                 .toList();
     }
 }
