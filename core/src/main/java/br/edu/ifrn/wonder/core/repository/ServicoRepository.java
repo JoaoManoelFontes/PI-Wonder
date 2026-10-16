@@ -12,4 +12,6 @@ public interface ServicoRepository extends JpaRepository<Servico, Long> {
     List<Servico> findByPrestadorIdAndStatusOrderByNomeAsc(Long prestadorId, StatusServico status);
 
     Optional<Servico> findByIdAndPrestadorId(Long id, Long prestadorId);
+
+    Optional<Servico> findByIdAndPrestadorIdAndStatus(Long id, Long prestadorId, StatusServico status);
 }
