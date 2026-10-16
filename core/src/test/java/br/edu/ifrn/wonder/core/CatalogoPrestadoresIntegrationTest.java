@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.UUID;
+import java.math.BigDecimal;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,10 +20,16 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import br.edu.ifrn.wonder.core.domain.PerfilUsuario;
+import br.edu.ifrn.wonder.core.domain.Categoria;
 import br.edu.ifrn.wonder.core.domain.Prestador;
+import br.edu.ifrn.wonder.core.domain.Servico;
+import br.edu.ifrn.wonder.core.domain.StatusCategoria;
 import br.edu.ifrn.wonder.core.domain.StatusPrestador;
+import br.edu.ifrn.wonder.core.domain.StatusServico;
+import br.edu.ifrn.wonder.core.repository.CategoriaRepository;
 import br.edu.ifrn.wonder.core.repository.PerfilUsuarioRepository;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
+import br.edu.ifrn.wonder.core.repository.ServicoRepository;
 
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
@@ -38,6 +45,12 @@ class CatalogoPrestadoresIntegrationTest {
 
     @Autowired
     private PerfilUsuarioRepository perfilUsuarioRepository;
+
+    @Autowired
+    private CategoriaRepository categoriaRepository;
+
+    @Autowired
+    private ServicoRepository servicoRepository;
 
     @Test
     void deveListarSemLoginSomentePrestadoresAtivosEAprovadosOrdenadosComContratoPublico() throws Exception {
@@ -105,6 +118,105 @@ class CatalogoPrestadoresIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void deveFiltrarNomeParcialSemDiferenciarMaiusculasEIgnorandoEspacosNasExtremidades() throws Exception {
+        inativarPrestadoresExistentes();
+        criarPrestador("Z Studio Beleza", StatusPrestador.ATIVO, true);
+        criarPrestador("A Studio Beleza", StatusPrestador.ATIVO, true);
+        criarPrestador("Studio Diferente", StatusPrestador.ATIVO, true);
+        criarPrestador("Studio Beleza pendente", StatusPrestador.PENDENTE, true);
+        criarPrestador("Studio Beleza inativo", StatusPrestador.ATIVO, false);
+        prestadorRepository.flush();
+
+        mockMvc.perform(get("/catalogo/prestadores").param("nome", "  sTuDiO bElE  "))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].nomeEstab").value("A Studio Beleza"))
+                .andExpect(jsonPath("$[1].nomeEstab").value("Z Studio Beleza"));
+    }
+
+    @Test
+    void deveIgnorarFiltroDeNomeVazioOuSomenteComEspacos() throws Exception {
+        inativarPrestadoresExistentes();
+        Prestador prestador = criarPrestador("Studio publico", StatusPrestador.ATIVO, true);
+        prestadorRepository.flush();
+
+        for (String nome : new String[] {"", "   "}) {
+            mockMvc.perform(get("/catalogo/prestadores").param("nome", nome))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()").value(1))
+                    .andExpect(jsonPath("$[0].id").value(prestador.getId().intValue()));
+        }
+    }
+
+    @Test
+    void deveFiltrarCategoriaPorServicosAtivosSemDuplicarPrestadores() throws Exception {
+        inativarPrestadoresExistentes();
+        Categoria categoria = categoriaRepository.save(Categoria.builder().nome("Categoria filtro").build());
+        Categoria outra = categoriaRepository.save(Categoria.builder().nome("Outra categoria filtro").build());
+        Prestador ultimo = criarPrestador("Z Studio categoria", StatusPrestador.ATIVO, true);
+        Prestador primeiro = criarPrestador("A Studio categoria", StatusPrestador.ATIVO, true);
+        criarServico(ultimo, categoria, StatusServico.ATIVO);
+        criarServico(primeiro, categoria, StatusServico.ATIVO);
+        criarServico(primeiro, categoria, StatusServico.ATIVO);
+        criarPrestador("Studio sem servicos", StatusPrestador.ATIVO, true);
+        criarServico(criarPrestador("Studio outra categoria", StatusPrestador.ATIVO, true), outra, StatusServico.ATIVO);
+        criarServico(criarPrestador("Studio servico inativo", StatusPrestador.ATIVO, true), categoria, StatusServico.INATIVO);
+        criarServico(criarPrestador("Studio pendente", StatusPrestador.PENDENTE, true), categoria, StatusServico.ATIVO);
+        criarServico(criarPrestador("Studio desativado", StatusPrestador.ATIVO, false), categoria, StatusServico.ATIVO);
+        criarServico(criarPrestador("Studio sem categoria", StatusPrestador.ATIVO, true), null, StatusServico.ATIVO);
+        servicoRepository.flush();
+
+        mockMvc.perform(get("/catalogo/prestadores").param("categoria_id", categoria.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(primeiro.getId().intValue()))
+                .andExpect(jsonPath("$[1].id").value(ultimo.getId().intValue()));
+
+        categoria.setStatus(StatusCategoria.INATIVA);
+        categoriaRepository.flush();
+
+        mockMvc.perform(get("/catalogo/prestadores").param("categoria_id", categoria.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
+    }
+
+    @Test
+    void deveCombinarNomeECategoriaERetornarListaVaziaQuandoNaoHaCorrespondencia() throws Exception {
+        inativarPrestadoresExistentes();
+        Categoria categoria = categoriaRepository.save(Categoria.builder().nome("Categoria combinada").build());
+        Categoria outra = categoriaRepository.save(Categoria.builder().nome("Outra categoria combinada").build());
+        Prestador encontrado = criarPrestador("Studio Alpha", StatusPrestador.ATIVO, true);
+        criarServico(encontrado, categoria, StatusServico.ATIVO);
+        criarServico(criarPrestador("Studio Beta", StatusPrestador.ATIVO, true), categoria, StatusServico.ATIVO);
+        criarServico(criarPrestador("Studio Alpha outra", StatusPrestador.ATIVO, true), outra, StatusServico.ATIVO);
+        servicoRepository.flush();
+
+        mockMvc.perform(get("/catalogo/prestadores")
+                        .param("nome", "alpha").param("categoria_id", categoria.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(encontrado.getId().intValue()));
+        mockMvc.perform(get("/catalogo/prestadores").param("nome", "sem correspondencia"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
+        mockMvc.perform(get("/catalogo/prestadores").param("categoria_id", Long.toString(Long.MAX_VALUE)))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
+    }
+
+    @Test
+    void deveRetornar400QuandoCategoriaIdNaoEhNumerico() throws Exception {
+        mockMvc.perform(get("/catalogo/prestadores").param("categoria_id", "invalido"))
+                .andExpect(status().isBadRequest());
+    }
+
+    private void criarServico(Prestador prestador, Categoria categoria, StatusServico status) {
+        servicoRepository.save(Servico.builder()
+                .prestador(prestador).categoria(categoria).nome("Servico filtro")
+                .preco(new BigDecimal("30.00")).duracaoMin(30).status(status).build());
     }
 
     private void inativarPrestadoresExistentes() {

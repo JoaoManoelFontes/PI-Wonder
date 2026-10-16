@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import br.edu.ifrn.wonder.core.dto.CategoriaPublicResponse;
@@ -27,8 +28,10 @@ public class CatalogoPublicoController {
     }
 
     @GetMapping("/prestadores")
-    List<PrestadorPublicResponse> listarPrestadores() {
-        return catalogoPublicoService.listarPrestadoresPublicos()
+    List<PrestadorPublicResponse> listarPrestadores(
+            @RequestParam(name = "nome", required = false) String nome,
+            @RequestParam(name = "categoria_id", required = false) Long categoriaId) {
+        return catalogoPublicoService.listarPrestadoresPublicos(nome, categoriaId)
                 .stream()
                 .map(PrestadorPublicResponse::from)
                 .toList();
