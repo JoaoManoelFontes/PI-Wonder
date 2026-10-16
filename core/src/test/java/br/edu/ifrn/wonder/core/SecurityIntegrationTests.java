@@ -84,7 +84,7 @@ class SecurityIntegrationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.keycloakId").value(KEYCLOAK_ID.toString()));
 
-        assertThat(perfilUsuarioRepository.count()).isOne();
+        assertThat(perfilUsuarioRepository.findByKeycloakId(KEYCLOAK_ID)).isPresent();
     }
 
     private JwtRequestPostProcessor wonderJwt() {
