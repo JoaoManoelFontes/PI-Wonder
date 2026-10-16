@@ -1,6 +1,7 @@
 package br.edu.ifrn.wonder.core.service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -48,5 +49,52 @@ public class PrestadorService {
                 .build();
 
         return prestadorRepository.save(prestador);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Prestador> listarSolicitacoesPendentes() {
+        return prestadorRepository.findByStatusOrderByEnviadoEmAsc(StatusPrestador.PENDENTE);
+    }
+
+    @Transactional(readOnly = true)
+    public Prestador detalharSolicitacaoPendente(Long id) {
+        return buscarSolicitacaoPendente(id);
+    }
+
+    @Transactional
+    public Prestador aprovarSolicitacao(Long id, UUID adminId) {
+        Prestador prestador = buscarSolicitacaoPendente(id);
+
+        prestador.setStatus(StatusPrestador.ATIVO);
+        prestador.setAtivo(true);
+        prestador.setAprovadoEm(LocalDateTime.now());
+        prestador.setAprovadoPor(adminId.toString());
+        prestador.setMotivoRejeicao(null);
+
+        return prestador;
+    }
+
+    @Transactional
+    public Prestador reprovarSolicitacao(Long id, UUID adminId) {
+        Prestador prestador = buscarSolicitacaoPendente(id);
+
+        prestador.setStatus(StatusPrestador.REJEITADO);
+        prestador.setAtivo(false);
+        prestador.setAprovadoEm(null);
+        prestador.setAprovadoPor(adminId.toString());
+        prestador.setMotivoRejeicao(null);
+
+        return prestador;
+    }
+
+    private Prestador buscarSolicitacaoPendente(Long id) {
+        Prestador prestador = prestadorRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Prestador não encontrado"));
+
+        if (prestador.getStatus() != StatusPrestador.PENDENTE) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Solicitação não está pendente");
+        }
+
+        return prestador;
     }
 }
