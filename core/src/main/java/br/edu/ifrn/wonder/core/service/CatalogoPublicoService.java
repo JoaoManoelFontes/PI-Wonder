@@ -35,7 +35,13 @@ public class CatalogoPublicoService {
     }
 
     public List<Prestador> listarPrestadoresPublicos() {
-        return prestadorRepository.findByAtivoTrueAndStatusOrderByNomeEstabAsc(StatusPrestador.ATIVO);
+        return listarPrestadoresPublicos(null, null);
+    }
+
+    public List<Prestador> listarPrestadoresPublicos(String nome, Long categoriaId) {
+        String nomeBusca = nome == null || nome.isBlank() ? "" : nome.trim();
+        return prestadorRepository.buscarPublicosComFiltros(
+                nomeBusca, categoriaId, StatusPrestador.ATIVO, StatusCategoria.ATIVA, StatusServico.ATIVO);
     }
 
     public Categoria buscarCategoriaAtiva(Long categoriaId) {
