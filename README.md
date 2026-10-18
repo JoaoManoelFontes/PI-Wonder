@@ -182,6 +182,8 @@ Os testes de integração utilizam Testcontainers e, portanto, podem exigir que 
 
 Exemplos da API atual: [horários e categorias do prestador](docs/Catalogo-Publico-Exemplos.md), com requests, respostas JSON e comandos de validação manual (LW-012).
 
+Consumo pelo frontend: [validação e simulação dos contratos de catálogo](docs/Catalogo-Validacao-Frontend.md), com comparação ao app antigo, scripts executáveis e pendências de integração (LW-013).
+
 A pasta [`docs`](docs/) reúne o documento do Projeto Integrador 2026.2 e a documentação da versão anterior do Wonder. O material antigo serve como referência de domínio e histórico; ele não representa automaticamente a arquitetura desta nova implementação.
 
 Projeto desenvolvido no Instituto Federal de Educação, Ciência e Tecnologia do Rio Grande do Norte — Campus Pau dos Ferros, para o curso de Tecnologia em Análise e Desenvolvimento de Sistemas.

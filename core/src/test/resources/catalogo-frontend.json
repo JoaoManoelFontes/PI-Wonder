@@ -1,0 +1,55 @@
+{
+  "observacao": "Recorte ilustrativo dos contratos atuais, baseado no seed, compartilhado pela simulação e pelo teste HTTP de formato. Não é uma captura da API nem uma cópia completa do banco.",
+  "rotasSimuladasSemEndpoint": ["/catalogo/prestadores/1/servicos"],
+  "respostas": {
+    "/catalogo/categorias": [
+      {"id": 2, "nome": "Barba", "descricao": "Corte, desenho e cuidados com a barba.", "status": "ativa", "foto_url": null},
+      {"id": 1, "nome": "Cabelo", "descricao": "Cortes, penteados, tranças e outros cuidados com o cabelo.", "status": "ativa", "foto_url": null},
+      {"id": 5, "nome": "Maquiagem", "descricao": "Maquiagem para eventos e outras ocasiões.", "status": "ativa", "foto_url": null},
+      {"id": 4, "nome": "Sobrancelhas", "descricao": "Design e cuidados com as sobrancelhas.", "status": "ativa", "foto_url": null},
+      {"id": 3, "nome": "Unhas", "descricao": "Manicure, pedicure e alongamento de unhas.", "status": "ativa", "foto_url": null}
+    ],
+    "/catalogo/prestadores": [{
+      "id": 1,
+      "perfilUsuarioId": "10000000-0000-0000-0000-000000000001",
+      "nomeEstab": "Studio Wonder",
+      "documento": "00000000000191",
+      "endereco": "Rua das Flores",
+      "numero": "100",
+      "bairro": "Centro",
+      "cidade": "Natal",
+      "estado": "RN",
+      "complemento": "Sala 1",
+      "status": "ativo",
+      "ativo": true,
+      "fotoUrl": null
+    }],
+    "/catalogo/prestadores/1": {
+      "id": 1,
+      "perfilUsuarioId": "10000000-0000-0000-0000-000000000001",
+      "nomeEstab": "Studio Wonder",
+      "documento": "00000000000191",
+      "endereco": "Rua das Flores",
+      "numero": "100",
+      "bairro": "Centro",
+      "cidade": "Natal",
+      "estado": "RN",
+      "complemento": "Sala 1",
+      "status": "ativo",
+      "ativo": true,
+      "fotoUrl": null
+    },
+    "/catalogo/prestadores/1/categorias": [
+      {"id": 1, "nome": "Cabelo", "descricao": "Cortes, penteados, tranças e outros cuidados com o cabelo.", "status": "ativa", "foto_url": null},
+      {"id": 4, "nome": "Sobrancelhas", "descricao": "Design e cuidados com as sobrancelhas.", "status": "ativa", "foto_url": null},
+      {"id": 3, "nome": "Unhas", "descricao": "Manicure, pedicure e alongamento de unhas.", "status": "ativa", "foto_url": null}
+    ],
+    "/catalogo/prestadores/1/horarios": [
+      {"id": 1, "prestador_id": 1, "dia_semana": 1, "hora_inicio": "09:00:00", "hora_fim": "18:00:00"},
+      {"id": 6, "prestador_id": 1, "dia_semana": 6, "hora_inicio": "09:00:00", "hora_fim": "13:00:00"}
+    ],
+    "/catalogo/prestadores/1/servicos": [
+      {"id": 1, "prestador_id": 1, "categoria_id": 1, "nome": "Corte de cabelo", "preco": 50.00, "duracao_min": 45, "status": "ativo", "foto_url": null}
+    ]
+  }
+}
