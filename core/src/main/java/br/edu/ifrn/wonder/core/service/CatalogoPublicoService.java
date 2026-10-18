@@ -70,4 +70,9 @@ public class CatalogoPublicoService {
         buscarPrestadorPublico(prestadorId);
         return horarioAtendimentoRepository.findByPrestadorIdOrderByDiaSemanaAscHoraInicioAsc(prestadorId);
     }
+
+    public List<Categoria> listarCategoriasDoPrestador(Long prestadorId) {
+        buscarPrestadorPublico(prestadorId);
+        return categoriaRepository.buscarPorPrestador(prestadorId, StatusCategoria.ATIVA, StatusServico.ATIVO);
+    }
 }
