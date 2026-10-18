@@ -65,4 +65,14 @@ public class CatalogoPublicoService {
         return horarioAtendimentoRepository.findByIdAndPrestadorId(horarioId, prestadorId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Horário de atendimento não encontrado"));
     }
+
+    public List<HorarioAtendimento> listarHorariosDoPrestador(Long prestadorId) {
+        buscarPrestadorPublico(prestadorId);
+        return horarioAtendimentoRepository.findByPrestadorIdOrderByDiaSemanaAscHoraInicioAsc(prestadorId);
+    }
+
+    public List<Categoria> listarCategoriasDoPrestador(Long prestadorId) {
+        buscarPrestadorPublico(prestadorId);
+        return categoriaRepository.buscarPorPrestador(prestadorId, StatusCategoria.ATIVA, StatusServico.ATIVO);
+    }
 }
