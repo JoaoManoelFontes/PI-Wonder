@@ -94,6 +94,28 @@ class PrestadorServiceTest {
     }
 
     @Test
+    void deveBuscarDetalhePublicoDePrestadorAtivo() {
+        Prestador prestador = prestadorAtivo();
+
+        when(prestadorRepository.findByIdAndStatusAndAtivoTrue(1L, StatusPrestador.ATIVO))
+                .thenReturn(Optional.of(prestador));
+
+        Prestador resultado = prestadorService.buscarDetalhePublico(1L);
+
+        assertThat(resultado).isSameAs(prestador);
+    }
+
+    @Test
+    void deveRetornarNotFoundQuandoPrestadorNaoEstaDisponivelNoCatalogo() {
+        when(prestadorRepository.findByIdAndStatusAndAtivoTrue(1L, StatusPrestador.ATIVO))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> prestadorService.buscarDetalhePublico(1L))
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
+                        assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+    }
+
+    @Test
     void deveDetalharSolicitacaoPendente() {
         Prestador prestador = prestadorPendente();
 
@@ -194,5 +216,12 @@ class PrestadorServiceTest {
                 .status(StatusPrestador.PENDENTE)
                 .ativo(false)
                 .build();
+    }
+
+    private Prestador prestadorAtivo() {
+        Prestador prestador = prestadorPendente();
+        prestador.setStatus(StatusPrestador.ATIVO);
+        prestador.setAtivo(true);
+        return prestador;
     }
 }

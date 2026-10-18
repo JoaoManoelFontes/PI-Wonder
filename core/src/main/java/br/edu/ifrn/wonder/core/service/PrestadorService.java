@@ -57,6 +57,12 @@ public class PrestadorService {
     }
 
     @Transactional(readOnly = true)
+    public Prestador buscarDetalhePublico(Long id) {
+        return prestadorRepository.findByIdAndStatusAndAtivoTrue(id, StatusPrestador.ATIVO)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Prestador não encontrado"));
+    }
+
+    @Transactional(readOnly = true)
     public Prestador detalharSolicitacaoPendente(Long id) {
         return buscarSolicitacaoPendente(id);
     }
