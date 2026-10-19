@@ -2,13 +2,14 @@
 
 Guia consolidado na LW-014, incluindo os exemplos de horários e categorias do prestador documentados na LW-012.
 
-Os cinco endpoints abaixo permitem consulta sem login. Envie os comandos sem header `Authorization` para validar o acesso público. As listagens retornam arrays JSON; o detalhe retorna um objeto. O prestador precisa ter `status = ATIVO` e `ativo = true` para aparecer no catálogo público.
+Os seis endpoints abaixo permitem consulta sem login. Envie os comandos sem header `Authorization` para validar o acesso público. As listagens retornam arrays JSON; o detalhe retorna um objeto. O prestador precisa ter `status = ATIVO` e `ativo = true` para aparecer no catálogo público.
 
 | Método e rota | Resposta de sucesso |
 | --- | --- |
 | `GET /catalogo/categorias` | Array de categorias ativas, ordenadas por nome. |
 | `GET /catalogo/prestadores` | Array de prestadores publicáveis, ordenados por `nomeEstab`, com filtros opcionais. |
 | `GET /catalogo/prestadores/{prestador_id}` | Objeto com o detalhe público do prestador. |
+| `GET /catalogo/prestadores/{prestador_id}/servicos` | Array de serviços ativos do prestador, ordenados por nome. |
 | `GET /catalogo/prestadores/{prestador_id}/horarios` | Array de intervalos, ordenados por dia e hora de início. |
 | `GET /catalogo/prestadores/{prestador_id}/categorias` | Array de categorias ativas vinculadas a serviços ativos do prestador, ordenadas por nome e sem repetições. |
 
@@ -166,7 +167,7 @@ Resposta `200 OK`, com `Content-Type: application/json`:
 }
 ```
 
-O detalhe usa o mesmo DTO da listagem, retornado como objeto. Horários e categorias são consultados pelas rotas específicas abaixo. Prestador inexistente ou indisponível retorna `404`; ID não numérico ou fora do intervalo aceito por `Long` retorna `400`.
+O detalhe usa o mesmo DTO da listagem, retornado como objeto. Serviços, horários e categorias são consultados pelas rotas específicas abaixo. Prestador inexistente ou indisponível retorna `404`; ID não numérico ou fora do intervalo aceito por `Long` retorna `400`.
 
 | Campo do prestador | Significado |
 | --- | --- |
@@ -180,6 +181,69 @@ O detalhe usa o mesmo DTO da listagem, retornado como objeto. Horários e catego
 | `fotoUrl` | URL da imagem do prestador, podendo ser `null`. |
 
 Preserve os nomes de cada DTO: prestador usa `nomeEstab`, `perfilUsuarioId` e `fotoUrl`; categoria usa `foto_url`. A comparação com o aplicativo antigo está no [guia de validação do frontend](Catalogo-Validacao-Frontend.md).
+
+## Serviços do prestador — JN-008
+
+```http
+GET /catalogo/prestadores/1/servicos
+Accept: application/json
+```
+
+```powershell
+curl.exe -i "http://localhost:8080/catalogo/prestadores/$prestadorId/servicos"
+```
+
+Resposta `200 OK`, com `Content-Type: application/json`, considerando os serviços do seed:
+
+```json
+[
+  {
+    "id": 1,
+    "prestador_id": 1,
+    "categoria_id": 1,
+    "nome": "Corte de cabelo",
+    "preco": 50.00,
+    "duracao_min": 45,
+    "status": "ativo",
+    "foto_url": null
+  },
+  {
+    "id": 2,
+    "prestador_id": 1,
+    "categoria_id": 4,
+    "nome": "Design de sobrancelhas",
+    "preco": 40.00,
+    "duracao_min": 30,
+    "status": "ativo",
+    "foto_url": null
+  },
+  {
+    "id": 3,
+    "prestador_id": 1,
+    "categoria_id": 3,
+    "nome": "Manicure",
+    "preco": 35.00,
+    "duracao_min": 60,
+    "status": "ativo",
+    "foto_url": null
+  }
+]
+```
+
+| Campo | Significado |
+| --- | --- |
+| `id` | ID do serviço, usado como `servico_id` nas consultas de disponibilidade. |
+| `prestador_id` | ID do prestador consultado. |
+| `categoria_id` | ID da categoria associada, podendo ser `null`. |
+| `nome` | Nome do serviço. |
+| `preco` | Preço como número JSON. |
+| `duracao_min` | Duração em minutos. |
+| `status` | `ativo` nas respostas desta consulta. |
+| `foto_url` | URL da imagem, podendo ser `null`. |
+
+A resposta usa `ServicoPublicResponse`. Retorna somente serviços com `status = ATIVO` do prestador consultado, ordenados por nome. Serviços inativos e de outros prestadores são excluídos. O filtro desta listagem não exige categoria ativa: serviços sem categoria ou com categoria inativa também podem aparecer. A consulta de categorias do prestador aplica seu próprio filtro de categorias ativas.
+
+Prestador público sem serviços ativos retorna `200` com `[]`. Prestador inexistente ou indisponível retorna `404`.
 
 ## Horários do prestador — LW-010
 
@@ -316,7 +380,7 @@ A resposta é um array direto de categorias, como no exemplo. Mesmo que vários 
 | Listagem de prestadores | `200`, `[]`, quando nenhum prestador público corresponde aos filtros. | `400` para `categoria_id` que não possa ser convertido em `Long`. |
 | Detalhe do prestador | `404` para prestador inexistente ou indisponível. | `400` para ID que não possa ser convertido em `Long`. |
 
-Para as duas listagens vinculadas ao prestador:
+Para as listagens de horários e categorias vinculadas ao prestador:
 
 | Situação | Horários | Categorias |
 | --- | --- | --- |
@@ -326,6 +390,8 @@ Para as duas listagens vinculadas ao prestador:
 | Prestador inexistente | `404`. | `404`. |
 | Prestador com `ativo = false` ou status diferente de `ATIVO` | `404`. | `404`. |
 | ID não numérico na URL | `400`. | `400`. |
+
+A listagem de serviços retorna `200` com um array de serviços ativos, ou `[]` quando nenhum estiver disponível. Segue os mesmos retornos `404` para prestador inexistente ou indisponível e `400` para ID que não possa ser convertido em `Long`.
 
 Exemplo de resposta `200 OK` para uma lista vazia:
 
@@ -348,6 +414,7 @@ Para conferir o `404`, use um ID que não exista no seu banco. No exemplo abaixo
 curl.exe -i 'http://localhost:8080/catalogo/prestadores/9223372036854775807'
 curl.exe -i 'http://localhost:8080/catalogo/prestadores/9223372036854775807/horarios'
 curl.exe -i 'http://localhost:8080/catalogo/prestadores/9223372036854775807/categorias'
+curl.exe -i 'http://localhost:8080/catalogo/prestadores/9223372036854775807/servicos'
 ```
 
 Para conferir o `400`:
@@ -356,37 +423,41 @@ Para conferir o `400`:
 curl.exe -i 'http://localhost:8080/catalogo/prestadores/invalido'
 curl.exe -i 'http://localhost:8080/catalogo/prestadores/invalido/horarios'
 curl.exe -i 'http://localhost:8080/catalogo/prestadores/invalido/categorias'
+curl.exe -i 'http://localhost:8080/catalogo/prestadores/invalido/servicos'
 ```
 
 Os critérios de erro deste guia fixam o status HTTP. A task não estabelece um novo formato global de corpo de erro; esse corpo segue o tratamento e a configuração atuais do Spring.
 
 ## Critérios para revisão nas issues
 
-- As cinco rotas existentes respondem sem token para dados públicos.
+- As seis rotas existentes respondem sem token para dados públicos.
 - Categorias gerais exibem somente categorias ativas, ordenadas por nome.
 - Prestadores exibem somente registros com `status = ATIVO` e `ativo = true`, ordenados por nome do estabelecimento.
 - Os filtros `nome` e `categoria_id` funcionam isoladamente e em conjunto, preservando os critérios de publicação.
 - Detalhe retorna um objeto com o mesmo contrato do item da listagem.
+- Serviços pertencem ao prestador consultado, têm status ativo e são ordenados por nome.
 - Horários pertencem ao prestador consultado e são ordenados por dia e hora.
 - Categorias do prestador pertencem a serviços ativos, são ativas e aparecem uma única vez.
 - Listas vazias e erros seguem os status documentados acima.
 
-## Pendências fora dos contratos implementados
+## Consultas de disponibilidade
 
-Na base da LW-014, `GET /catalogo/prestadores/{prestador_id}/servicos` ainda depende da JN-008. O DTO existente e a fixture usada na LW-013 não equivalem à entrega desse endpoint.
+`GET /agendamentos/dias-disponiveis` e `GET /agendamentos/disponibilidade` estão implementados e permitem consulta sem login. A primeira recebe `prestador_id`, `servico_id` e `mes` (`yyyy-MM`); a segunda recebe `prestador_id`, `servico_id` e `data` (`yyyy-MM-dd`).
 
-Os endpoints de dias e horários disponíveis para agendamento também dependem das entregas de agendamentos. Este guia documenta horários de atendimento, sem afirmar que esses intervalos estão livres de conflitos.
+Os horários retornados por `/catalogo/prestadores/{prestador_id}/horarios` representam os intervalos de atendimento cadastrados. Para consultar horários livres conforme duração do serviço e conflitos com agendamentos, use `/agendamentos/disponibilidade`. Os parâmetros, respostas e exemplos do seed estão no [guia de disponibilidade](Disponibilidade-Exemplos.md).
 
 ## Validação automatizada
 
-Os testes `CatalogoCategoriasIntegrationTest`, `CatalogoPrestadoresIntegrationTest` e `CatalogoPrestadorIntegrationTest` cobrem as listagens gerais, filtros e detalhe. O `CatalogoFrontendContractIntegrationTest` confere os formatos das fixtures de consumo com os cinco endpoints existentes.
+Os testes `CatalogoCategoriasIntegrationTest`, `CatalogoPrestadoresIntegrationTest` e `CatalogoPrestadorIntegrationTest` cobrem as listagens gerais, filtros e detalhe. O `CatalogoFrontendContractIntegrationTest` confere os formatos das fixtures de consumo com cinco das seis rotas: categorias gerais, prestadores, detalhe, horários e categorias do prestador. A rota de serviços ainda não faz parte dessa comparação compartilhada.
+
+O `CatalogoServicosIntegrationTest` valida o endpoint de serviços sem login, os oito campos do DTO, vínculo com o prestador, filtro de serviços ativos, ordenação, lista vazia e `404` para prestadores inexistentes ou indisponíveis.
 
 Os testes `CatalogoHorariosIntegrationTest` e `CatalogoCategoriasPrestadorIntegrationTest` cobrem acesso sem autenticação, contrato JSON, ordenação, vínculo com o prestador, listas vazias e retorno `404`. A listagem de categorias também cobre filtros de status e ausência de duplicações.
 
 Com o Docker disponível, execute na raiz do projeto:
 
 ```powershell
-.\mvnw.cmd -pl core test '-Dtest=CatalogoHorariosIntegrationTest,CatalogoCategoriasPrestadorIntegrationTest'
+.\mvnw.cmd -pl core test '-Dtest=CatalogoHorariosIntegrationTest,CatalogoCategoriasPrestadorIntegrationTest,CatalogoServicosIntegrationTest'
 ```
 
 Para executar toda a suíte do `core`:

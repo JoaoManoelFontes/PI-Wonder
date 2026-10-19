@@ -3,6 +3,7 @@ package br.edu.ifrn.wonder.core;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -11,10 +12,13 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -48,6 +52,22 @@ class SecurityIntegrationTests {
     @Test
     void shouldRejectProtectedEndpointWithoutJwt() throws Exception {
         mockMvc.perform(get("/test/me"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/agendamentos/dias-disponiveis", "/agendamentos/disponibilidade"})
+    void deveManterOutrosMetodosDeDisponibilidadeProtegidos(String caminho) throws Exception {
+        for (HttpMethod metodo : List.of(HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE)) {
+            mockMvc.perform(request(metodo, caminho))
+                    .andExpect(status().isUnauthorized());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/agendamentos", "/agendamentos/outro", "/perfis/eu"})
+    void deveManterDemaisConsultasProtegidas(String caminho) throws Exception {
+        mockMvc.perform(get(caminho))
                 .andExpect(status().isUnauthorized());
     }
 

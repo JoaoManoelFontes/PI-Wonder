@@ -50,7 +50,7 @@ class AgendamentoDiasDisponiveisIntegrationTest {
     private HorarioAtendimentoRepository horarioAtendimentoRepository;
 
     @Test
-    void deveListarDiasDisponiveisDoMesParaUsuarioAutenticado() throws Exception {
+    void deveListarDiasDisponiveisDoMesSemAutenticacao() throws Exception {
         Prestador prestador = criarPrestador();
         Servico servico = criarServico(prestador);
         criarHorario(prestador, 1, "09:00", "12:00");
@@ -58,8 +58,7 @@ class AgendamentoDiasDisponiveisIntegrationTest {
         mockMvc.perform(get("/agendamentos/dias-disponiveis")
                         .param("prestador_id", prestador.getId().toString())
                         .param("servico_id", servico.getId().toString())
-                        .param("mes", "2099-01")
-                        .with(jwt()))
+                        .param("mes", "2099-01"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.prestador_id").value(prestador.getId().intValue()))
                 .andExpect(jsonPath("$.servico_id").value(servico.getId().intValue()))
@@ -71,12 +70,17 @@ class AgendamentoDiasDisponiveisIntegrationTest {
     }
 
     @Test
-    void deveExigirAutenticacao() throws Exception {
+    void devePermitirConsultaComAutenticacao() throws Exception {
+        Prestador prestador = criarPrestador();
+        Servico servico = criarServico(prestador);
+
         mockMvc.perform(get("/agendamentos/dias-disponiveis")
-                        .param("prestador_id", "1")
-                        .param("servico_id", "1")
-                        .param("mes", "2099-01"))
-                .andExpect(status().isUnauthorized());
+                        .param("prestador_id", prestador.getId().toString())
+                        .param("servico_id", servico.getId().toString())
+                        .param("mes", "2099-01")
+                        .with(jwt()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dias").isEmpty());
     }
 
     @Test
@@ -84,8 +88,7 @@ class AgendamentoDiasDisponiveisIntegrationTest {
         mockMvc.perform(get("/agendamentos/dias-disponiveis")
                         .param("prestador_id", "1")
                         .param("servico_id", "1")
-                        .param("mes", "01-2099")
-                        .with(jwt()))
+                        .param("mes", "01-2099"))
                 .andExpect(status().isBadRequest());
     }
 

@@ -50,7 +50,7 @@ class AgendamentoDisponibilidadeIntegrationTest {
     private HorarioAtendimentoRepository horarioAtendimentoRepository;
 
     @Test
-    void deveListarHorariosDisponiveisParaUsuarioAutenticado() throws Exception {
+    void deveListarHorariosDisponiveisSemAutenticacao() throws Exception {
         Prestador prestador = criarPrestador();
         Servico servico = criarServico(prestador);
         criarHorario(prestador, 1, "09:00", "12:00");
@@ -58,8 +58,7 @@ class AgendamentoDisponibilidadeIntegrationTest {
         mockMvc.perform(get("/agendamentos/disponibilidade")
                         .param("prestador_id", prestador.getId().toString())
                         .param("servico_id", servico.getId().toString())
-                        .param("data", "2099-01-05")
-                        .with(jwt()))
+                        .param("data", "2099-01-05"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.prestador_id").value(prestador.getId().intValue()))
                 .andExpect(jsonPath("$.servico_id").value(servico.getId().intValue()))
@@ -73,12 +72,17 @@ class AgendamentoDisponibilidadeIntegrationTest {
     }
 
     @Test
-    void deveExigirAutenticacao() throws Exception {
+    void devePermitirConsultaComAutenticacao() throws Exception {
+        Prestador prestador = criarPrestador();
+        Servico servico = criarServico(prestador);
+
         mockMvc.perform(get("/agendamentos/disponibilidade")
-                        .param("prestador_id", "1")
-                        .param("servico_id", "1")
-                        .param("data", "2099-01-05"))
-                .andExpect(status().isUnauthorized());
+                        .param("prestador_id", prestador.getId().toString())
+                        .param("servico_id", servico.getId().toString())
+                        .param("data", "2099-01-05")
+                        .with(jwt()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.horarios").isEmpty());
     }
 
     @Test
@@ -86,8 +90,7 @@ class AgendamentoDisponibilidadeIntegrationTest {
         mockMvc.perform(get("/agendamentos/disponibilidade")
                         .param("prestador_id", "1")
                         .param("servico_id", "1")
-                        .param("data", "05-01-2099")
-                        .with(jwt()))
+                        .param("data", "05-01-2099"))
                 .andExpect(status().isBadRequest());
     }
 
