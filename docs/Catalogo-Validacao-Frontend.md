@@ -26,7 +26,7 @@ Os contratos adotados são os DTOs e endpoints atuais do PI-Wonder. A arquitetur
 | Horário com `dia_semana`, `hora_inicio`, `hora_fim` | Mesmos campos, com horas em `HH:mm:ss` | Converte para `HH:mm` apenas na apresentação; os dias continuam de 1 a 7. |
 | URL padrão do cliente antigo na porta 8000 | `core` usa 8080 por padrão | A validação real recebe a URL base por argumento. Um frontend integrado deverá configurar sua URL de API. |
 
-A simulação não interpreta horário de atendimento como disponibilidade para agendamento. O cálculo de horários livres depende das entregas de agendamentos.
+A simulação não interpreta horário de atendimento como disponibilidade para agendamento. O backend já oferece `GET /agendamentos/dias-disponiveis` e `GET /agendamentos/disponibilidade`, ambos sem login; o consumo dessas duas rotas não faz parte dos scripts de catálogo.
 
 ## Estado por tela
 
@@ -35,11 +35,11 @@ A simulação não interpreta horário de atendimento como disponibilidade para 
 | Categorias | `GET /catalogo/categorias` | Contrato consumido pela simulação e formato conferido contra o HTTP real em teste. |
 | Busca/cards | `GET /catalogo/prestadores`, categorias e horários de cada prestador | Consumo simulado; parâmetros `nome` e `categoria_id` conferidos no cliente de validação. O comportamento dos filtros é coberto pelos testes HTTP existentes. |
 | Detalhe básico | Detalhe do prestador, categorias e horários | Consumo simulado; formato dos três endpoints conferido contra o HTTP real em teste. |
-| Serviços no detalhe | `GET /catalogo/prestadores/{id}/servicos` | Endpoint ainda ausente nesta base, dependente da JN-008. A fixture é provisória, baseada no `ServicoPublicResponse`, e aparece identificada como simulada. |
+| Serviços no detalhe | `GET /catalogo/prestadores/{id}/servicos` | Endpoint implementado na JN-008, com testes HTTP próprios. No modo de fixtures, os dados continuam identificados como simulados; no modo `--api`, o script consome o endpoint real. |
 
-No app antigo, o detalhe usa `Promise.all` para as quatro consultas; uma falha em serviços impede a tela inteira de carregar. Na simulação, o `404` da consulta de serviços deixa uma pendência explícita e preserva os demais dados do detalhe. Outros erros HTTP e contratos inválidos são propagados, não convertidos em listas vazias.
+No app antigo, o detalhe usa `Promise.all` para as quatro consultas; uma falha em serviços impede a tela inteira de carregar. O script mantém o tratamento de `404` na consulta de serviços: registra uma pendência e preserva os demais dados do detalhe. Esse comportamento é uma limitação do cliente de validação: um `404` também pode indicar prestador inexistente ou indisponível, e não comprova ausência do endpoint. Outros erros HTTP e contratos inválidos são propagados, não convertidos em listas vazias.
 
-O detalhe completo integrado ao backend permanece dependente da JN-008. A simulação não implementa esse endpoint nem declara sua integração concluída.
+As quatro consultas necessárias ao detalhe estão implementadas no backend. Os exemplos e regras de serviços estão no [guia do catálogo público](Catalogo-Publico-Exemplos.md). A validação permanece uma simulação de consumo no terminal; a adaptação e a execução das telas do aplicativo Expo continuam fora desta entrega.
 
 ## Executar a simulação
 
@@ -53,7 +53,7 @@ node scripts/catalogo/simular.cjs
 
 A saída contém `telas.categorias`, `telas.busca`, `telas.detalhe` e `pendencias`. A origem é identificada como `fixtures de simulação`, e `detalhe.servicos.situacao` indica `simulado`.
 
-As respostas ilustrativas ficam em `core/src/test/resources/catalogo-frontend.json`, compartilhadas com o teste HTTP de formato. Os dados são um recorte do seed, não uma captura da API. IDs, quantidade de registros e valores ilustrativos não são fixados como contrato pelo teste.
+As respostas ilustrativas ficam em `core/src/test/resources/catalogo-frontend.json`, compartilhadas com o teste HTTP de formato. Os dados são um recorte do seed, não uma captura da API. IDs, quantidade de registros e valores ilustrativos não são fixados como contrato pelo teste. O campo legado `rotasSimuladasSemEndpoint` ainda marca os serviços como simulados no modo de fixtures; esse nome não representa o inventário atual de endpoints do backend.
 
 Para consumir uma API já iniciada, sem enviar token:
 
@@ -61,7 +61,7 @@ Para consumir uma API já iniciada, sem enviar token:
 node scripts/catalogo/simular.cjs --api http://localhost:8080
 ```
 
-Nesse modo, os dados vêm exclusivamente da API informada. O script seleciona o primeiro prestador retornado para montar o detalhe. Se serviços retornarem `404`, a situação será `pendente`; uma resposta bem-sucedida será identificada como `consumido`. Nenhuma fixture é usada como fallback da API real.
+Nesse modo, os dados vêm exclusivamente da API informada. O script seleciona o primeiro prestador retornado para montar o detalhe e consulta seus serviços no endpoint implementado. Uma resposta bem-sucedida, incluindo lista vazia, será identificada como `consumido`. Se a consulta de serviços retornar `404`, a situação será `pendente`, conforme o tratamento descrito acima. Nenhuma fixture é usada como fallback da API real.
 
 ## Verificações automatizadas
 
@@ -78,10 +78,10 @@ Os testes verificam:
 - tratamento da pendência de serviços sem ocultar erros HTTP 500;
 - propagação de `404` no detalhe e rejeição de horários de outro prestador.
 
-O teste de integração abaixo compara nomes e tipos dos campos das fixtures com os cinco endpoints existentes, via MockMvc e PostgreSQL. O serviço fictício é excluído dessa comparação porque seu endpoint ainda não existe. O Docker precisa estar disponível:
+O `CatalogoFrontendContractIntegrationTest` compara nomes e tipos dos campos das fixtures com cinco das seis rotas de catálogo, via MockMvc e PostgreSQL: categorias gerais, prestadores, detalhe, horários e categorias do prestador. A rota de serviços ainda não foi incluída nessa comparação compartilhada; seu contrato e comportamento são validados separadamente pelo `CatalogoServicosIntegrationTest`. O Docker precisa estar disponível:
 
 ```powershell
-.\mvnw.cmd -pl core test '-Dtest=CatalogoFrontendContractIntegrationTest'
+.\mvnw.cmd -pl core test '-Dtest=CatalogoFrontendContractIntegrationTest,CatalogoServicosIntegrationTest'
 ```
 
 Os testes HTTP anteriores continuam responsáveis pelos valores, critérios de publicação, filtros, ordenação e ausência de duplicações. A implementação desta task não altera DTOs, controllers, schema, autenticação ou arquivos do aplicativo antigo.
