@@ -75,4 +75,9 @@ public class CatalogoPublicoService {
         buscarPrestadorPublico(prestadorId);
         return categoriaRepository.buscarPorPrestador(prestadorId, StatusCategoria.ATIVA, StatusServico.ATIVO);
     }
+
+    public List<Servico> listarServicosDoPrestador(Long prestadorId) {
+        buscarPrestadorPublico(prestadorId);
+        return servicoRepository.findByPrestadorIdAndStatusOrderByNomeAsc(prestadorId, StatusServico.ATIVO);
+    }
 }
