@@ -111,6 +111,61 @@ class DisponibilidadeServiceTest {
         assertThat(resposta.horarios()).isEmpty();
     }
 
+    @Test
+    void deveGerarIntervalosDeTrintaMinutos() {
+        configurarDuracaoDoServico(30);
+        configurarAgenda("09:00", "11:00");
+        semAgendamentosNoDia();
+
+        DisponibilidadeResponse resposta = disponibilidadeService.calcular(PRESTADOR_ID, SERVICO_ID, SEGUNDA);
+
+        assertThat(resposta.duracaoMin()).isEqualTo(30);
+        assertThat(resposta.horarios())
+                .extracting(horario -> horario.inicio().toLocalTime())
+                .containsExactly(
+                        LocalTime.of(9, 0),
+                        LocalTime.of(9, 30),
+                        LocalTime.of(10, 0),
+                        LocalTime.of(10, 30));
+    }
+
+    @Test
+    void deveGerarIntervalosDeQuarentaECincoMinutos() {
+        configurarDuracaoDoServico(45);
+        configurarAgenda("09:00", "12:00");
+        semAgendamentosNoDia();
+
+        DisponibilidadeResponse resposta = disponibilidadeService.calcular(PRESTADOR_ID, SERVICO_ID, SEGUNDA);
+
+        assertThat(resposta.duracaoMin()).isEqualTo(45);
+        assertThat(resposta.horarios())
+                .extracting(horario -> horario.inicio().toLocalTime())
+                .containsExactly(
+                        LocalTime.of(9, 0),
+                        LocalTime.of(9, 45),
+                        LocalTime.of(10, 30),
+                        LocalTime.of(11, 15));
+    }
+
+    @Test
+    void naoDeveRetornarIntervaloIncompletoNoFimDaAgenda() {
+        configurarDuracaoDoServico(50);
+        configurarAgenda("09:00", "12:00");
+        semAgendamentosNoDia();
+
+        DisponibilidadeResponse resposta = disponibilidadeService.calcular(PRESTADOR_ID, SERVICO_ID, SEGUNDA);
+
+        assertThat(resposta.horarios())
+                .extracting(horario -> horario.inicio().toLocalTime())
+                .containsExactly(
+                        LocalTime.of(9, 0),
+                        LocalTime.of(9, 50),
+                        LocalTime.of(10, 40));
+        assertThat(resposta.horarios())
+                .allSatisfy(horario -> assertThat(horario.fim().toLocalTime())
+                        .isBeforeOrEqualTo(LocalTime.NOON));
+    }
+
     private void semAgendamentosNoDia() {
         when(agendamentoRepository
                 .findByPrestadorIdAndInicioLessThanAndFimGreaterThanAndStatusNotOrderByInicioAsc(
@@ -119,6 +174,16 @@ class DisponibilidadeServiceTest {
                         any(LocalDateTime.class),
                         eq(StatusAgendamento.CANCELADO)))
                 .thenReturn(List.of());
+    }
+
+    private void configurarDuracaoDoServico(int duracaoMin) {
+        when(catalogoPublicoService.buscarServicoAtivo(PRESTADOR_ID, SERVICO_ID))
+                .thenReturn(Servico.builder().id(SERVICO_ID).duracaoMin(duracaoMin).build());
+    }
+
+    private void configurarAgenda(String inicio, String fim) {
+        when(horarioAtendimentoRepository.findByPrestadorIdOrderByDiaSemanaAscHoraInicioAsc(PRESTADOR_ID))
+                .thenReturn(List.of(horario(1, inicio, fim)));
     }
 
     private HorarioAtendimento horario(int diaSemana, String inicio, String fim) {
