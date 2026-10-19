@@ -3,6 +3,7 @@ package br.edu.ifrn.wonder.core.service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,6 +15,8 @@ import br.edu.ifrn.wonder.core.domain.HorarioAtendimento;
 import br.edu.ifrn.wonder.core.domain.Servico;
 import br.edu.ifrn.wonder.core.domain.StatusAgendamento;
 import br.edu.ifrn.wonder.core.dto.DisponibilidadeResponse;
+import br.edu.ifrn.wonder.core.dto.DiaDisponivelResponse;
+import br.edu.ifrn.wonder.core.dto.DiasDisponiveisResponse;
 import br.edu.ifrn.wonder.core.dto.HorarioDisponivelResponse;
 import br.edu.ifrn.wonder.core.repository.AgendamentoRepository;
 import br.edu.ifrn.wonder.core.repository.HorarioAtendimentoRepository;
@@ -48,15 +51,55 @@ public class DisponibilidadeService {
                 horariosLivres);
     }
 
+    public DiasDisponiveisResponse calcularDiasDisponiveis(
+            Long prestadorId,
+            Long servicoId,
+            YearMonth mes) {
+        Servico servico = catalogoPublicoService.buscarServicoAtivo(prestadorId, servicoId);
+        List<HorarioAtendimento> horarios = horarioAtendimentoRepository
+                .findByPrestadorIdOrderByDiaSemanaAscHoraInicioAsc(prestadorId);
+        List<Agendamento> agendamentos = buscarAgendamentosDoPeriodo(
+                prestadorId,
+                mes.atDay(1).atStartOfDay(),
+                mes.plusMonths(1).atDay(1).atStartOfDay());
+        List<DiaDisponivelResponse> dias = new ArrayList<>();
+
+        for (LocalDate data = mes.atDay(1); !data.isAfter(mes.atEndOfMonth()); data = data.plusDays(1)) {
+            List<HorarioDisponivelResponse> horariosLivres = gerarHorariosLivres(
+                    data,
+                    servico.getDuracaoMin(),
+                    horarios,
+                    agendamentos);
+
+            if (!horariosLivres.isEmpty()) {
+                dias.add(new DiaDisponivelResponse(data, true));
+            }
+        }
+
+        return new DiasDisponiveisResponse(
+                prestadorId,
+                servicoId,
+                mes.toString(),
+                dias);
+    }
+
     private List<Agendamento> buscarAgendamentosDoDia(Long prestadorId, LocalDate data) {
         LocalDateTime inicioDia = data.atStartOfDay();
         LocalDateTime fimDia = inicioDia.plusDays(1);
 
+        return buscarAgendamentosDoPeriodo(prestadorId, inicioDia, fimDia);
+    }
+
+    private List<Agendamento> buscarAgendamentosDoPeriodo(
+            Long prestadorId,
+            LocalDateTime inicio,
+            LocalDateTime fim) {
+
         return agendamentoRepository
                 .findByPrestadorIdAndInicioLessThanAndFimGreaterThanAndStatusNotOrderByInicioAsc(
                         prestadorId,
-                        fimDia,
-                        inicioDia,
+                        fim,
+                        inicio,
                         StatusAgendamento.CANCELADO);
     }
 

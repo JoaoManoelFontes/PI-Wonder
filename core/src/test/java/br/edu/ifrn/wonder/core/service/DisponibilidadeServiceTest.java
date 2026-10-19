@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.YearMonth;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +23,7 @@ import br.edu.ifrn.wonder.core.domain.HorarioAtendimento;
 import br.edu.ifrn.wonder.core.domain.Servico;
 import br.edu.ifrn.wonder.core.domain.StatusAgendamento;
 import br.edu.ifrn.wonder.core.dto.DisponibilidadeResponse;
+import br.edu.ifrn.wonder.core.dto.DiasDisponiveisResponse;
 import br.edu.ifrn.wonder.core.repository.AgendamentoRepository;
 import br.edu.ifrn.wonder.core.repository.HorarioAtendimentoRepository;
 
@@ -164,6 +166,50 @@ class DisponibilidadeServiceTest {
         assertThat(resposta.horarios())
                 .allSatisfy(horario -> assertThat(horario.fim().toLocalTime())
                         .isBeforeOrEqualTo(LocalTime.NOON));
+    }
+
+    @Test
+    void deveListarSomenteDiasDoMesComHorarioDisponivel() {
+        YearMonth mes = YearMonth.of(2099, 1);
+        semAgendamentosNoDia();
+
+        DiasDisponiveisResponse resposta = disponibilidadeService
+                .calcularDiasDisponiveis(PRESTADOR_ID, SERVICO_ID, mes);
+
+        assertThat(resposta.prestadorId()).isEqualTo(PRESTADOR_ID);
+        assertThat(resposta.servicoId()).isEqualTo(SERVICO_ID);
+        assertThat(resposta.mes()).isEqualTo("2099-01");
+        assertThat(resposta.dias())
+                .allSatisfy(dia -> assertThat(dia.disponivel()).isTrue())
+                .extracting(dia -> dia.data())
+                .containsExactly(
+                        LocalDate.of(2099, 1, 5),
+                        LocalDate.of(2099, 1, 12),
+                        LocalDate.of(2099, 1, 19),
+                        LocalDate.of(2099, 1, 26));
+    }
+
+    @Test
+    void naoDeveListarDiaComAgendaTotalmenteOcupada() {
+        YearMonth mes = YearMonth.of(2099, 1);
+        when(agendamentoRepository
+                .findByPrestadorIdAndInicioLessThanAndFimGreaterThanAndStatusNotOrderByInicioAsc(
+                        PRESTADOR_ID,
+                        mes.plusMonths(1).atDay(1).atStartOfDay(),
+                        mes.atDay(1).atStartOfDay(),
+                        StatusAgendamento.CANCELADO))
+                .thenReturn(List.of(agendamento("09:00", "12:00", StatusAgendamento.CONFIRMADO)));
+
+        DiasDisponiveisResponse resposta = disponibilidadeService
+                .calcularDiasDisponiveis(PRESTADOR_ID, SERVICO_ID, mes);
+
+        assertThat(resposta.dias())
+                .extracting(dia -> dia.data())
+                .doesNotContain(SEGUNDA)
+                .containsExactly(
+                        LocalDate.of(2099, 1, 12),
+                        LocalDate.of(2099, 1, 19),
+                        LocalDate.of(2099, 1, 26));
     }
 
     private void semAgendamentosNoDia() {
