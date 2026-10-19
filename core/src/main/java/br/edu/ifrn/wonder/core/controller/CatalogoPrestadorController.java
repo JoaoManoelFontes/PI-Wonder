@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 import br.edu.ifrn.wonder.core.dto.PrestadorPublicResponse;
 import br.edu.ifrn.wonder.core.dto.HorarioAtendimentoPublicResponse;
 import br.edu.ifrn.wonder.core.dto.CategoriaPublicResponse;
+import br.edu.ifrn.wonder.core.dto.ServicoPublicResponse;
 import br.edu.ifrn.wonder.core.service.CatalogoPublicoService;
 import br.edu.ifrn.wonder.core.service.PrestadorService;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +41,14 @@ public class CatalogoPrestadorController {
         return catalogoPublicoService.listarCategoriasDoPrestador(prestadorId)
                 .stream()
                 .map(CategoriaPublicResponse::from)
+                .toList();
+    }
+
+    @GetMapping("/{prestadorId}/servicos")
+    List<ServicoPublicResponse> listarServicos(@PathVariable("prestadorId") Long prestadorId) {
+        return catalogoPublicoService.listarServicosDoPrestador(prestadorId)
+                .stream()
+                .map(ServicoPublicResponse::from)
                 .toList();
     }
 }
