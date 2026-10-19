@@ -444,7 +444,7 @@ Os critérios de erro deste guia fixam o status HTTP. A task não estabelece um 
 
 `GET /agendamentos/dias-disponiveis` e `GET /agendamentos/disponibilidade` estão implementados e permitem consulta sem login. A primeira recebe `prestador_id`, `servico_id` e `mes` (`yyyy-MM`); a segunda recebe `prestador_id`, `servico_id` e `data` (`yyyy-MM-dd`).
 
-Os horários retornados por `/catalogo/prestadores/{prestador_id}/horarios` representam os intervalos de atendimento cadastrados. Para consultar horários livres conforme duração do serviço e conflitos com agendamentos, use `/agendamentos/disponibilidade`. Este guia concentra os exemplos dos contratos do catálogo.
+Os horários retornados por `/catalogo/prestadores/{prestador_id}/horarios` representam os intervalos de atendimento cadastrados. Para consultar horários livres conforme duração do serviço e conflitos com agendamentos, use `/agendamentos/disponibilidade`. Os parâmetros, respostas e exemplos do seed estão no [guia de disponibilidade](Disponibilidade-Exemplos.md).
 
 ## Validação automatizada
 
