@@ -511,6 +511,23 @@ Accept: application/json
 
 `CatalogoPrestadorEnvioAprovacaoIntegrationTest` cobre envio, reenvio, requisitos, propriedade, persistência e integração com a listagem administrativa de solicitações pendentes.
 
+## Categorias do prestador logado — AUTH-LW-005
+
+`GET /catalogo/prestadores/me/categorias` exige JWT e retorna um array de `CategoriaPublicResponse`, com os mesmos cinco campos da consulta pública de categorias. O prestador é identificado exclusivamente pelo vínculo do perfil local com o `sub` do token; não recebe ID de usuário ou prestador como parâmetro.
+
+Retorna categorias ativas vinculadas aos serviços ativos do próprio prestador, ordenadas por nome e sem duplicações. Serviços sem categoria, serviços inativos e categorias inativas são ignorados. O dono pode consultar em qualquer status do cadastro, inclusive pendente ou rejeitado, e independentemente do campo `ativo`.
+
+Conforme a decisão adotada para o projeto novo, as categorias do prestador são derivadas dos serviços. Não há associação manual nem rotas POST/DELETE em `/me/categorias`. Alterar a categoria ou o status de um serviço reflete na consulta, sem manter uma segunda lista de vínculos.
+
+| Situação | Retorno |
+| --- | --- |
+| Prestador autenticado com categorias disponíveis | `200`, array de categorias. |
+| Prestador autenticado sem categorias ativas em serviços ativos | `200`, `[]`. |
+| Sem autenticação | `401`. |
+| Usuário sem cadastro de prestador, com ou sem perfil local | `404`, sem criar registros. |
+
+`CatalogoCategoriasPrestadorLogadoIntegrationTest` cobre autenticação, isolamento entre usuários, filtros, ordenação, duplicação, estados do prestador e atualização das categorias a partir dos serviços. A consulta pública `GET /catalogo/prestadores/{prestador_id}/categorias` continua exigindo prestador publicável e funcionando sem login.
+
 ## Consultas de disponibilidade
 
 `GET /agendamentos/dias-disponiveis` e `GET /agendamentos/disponibilidade` estão implementados e permitem consulta sem login. A primeira recebe `prestador_id`, `servico_id` e `mes` (`yyyy-MM`); a segunda recebe `prestador_id`, `servico_id` e `data` (`yyyy-MM-dd`).

@@ -1,5 +1,7 @@
 package br.edu.ifrn.wonder.core.controller;
 
+import java.util.List;
+
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -9,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import br.edu.ifrn.wonder.core.dto.PrestadorPublicResponse;
+import br.edu.ifrn.wonder.core.dto.CategoriaPublicResponse;
 import br.edu.ifrn.wonder.core.dto.AtualizacaoPrestadorRequest;
 import br.edu.ifrn.wonder.core.security.UsuarioAutenticadoProvider;
 import br.edu.ifrn.wonder.core.service.PrestadorService;
@@ -27,6 +30,14 @@ public class CatalogoPrestadorLogadoController {
     PrestadorPublicResponse buscarMeuCadastro() {
         return PrestadorPublicResponse.from(prestadorService.buscarPrestadorDoUsuario(
                 usuarioAutenticadoProvider.getUuidUsuario()));
+    }
+
+    @GetMapping("/me/categorias")
+    List<CategoriaPublicResponse> listarMinhasCategorias() {
+        return prestadorService.listarCategoriasDoUsuario(usuarioAutenticadoProvider.getUuidUsuario())
+                .stream()
+                .map(CategoriaPublicResponse::from)
+                .toList();
     }
 
     @PutMapping("/{prestadorId}")
