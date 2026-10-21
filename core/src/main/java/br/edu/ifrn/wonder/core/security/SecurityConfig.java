@@ -32,7 +32,8 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/catalogo/prestadores/me").authenticated()
+                        .requestMatchers(HttpMethod.GET,
+                                "/catalogo/prestadores/me", "/catalogo/prestadores/me/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/catalogo/**").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/agendamentos/dias-disponiveis",

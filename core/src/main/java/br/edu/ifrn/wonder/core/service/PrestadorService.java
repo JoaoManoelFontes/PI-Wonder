@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import br.edu.ifrn.wonder.core.domain.PerfilUsuario;
+import br.edu.ifrn.wonder.core.domain.Categoria;
 import br.edu.ifrn.wonder.core.domain.Prestador;
 import br.edu.ifrn.wonder.core.domain.StatusPrestador;
 import br.edu.ifrn.wonder.core.domain.StatusCategoria;
@@ -65,6 +66,12 @@ public class PrestadorService {
     public Prestador buscarPrestadorDoUsuario(UUID keycloakId) {
         return prestadorRepository.findByPerfilUsuarioKeycloakId(keycloakId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Prestador não encontrado"));
+    }
+
+    @Transactional(readOnly = true)
+    public List<Categoria> listarCategoriasDoUsuario(UUID keycloakId) {
+        Prestador prestador = buscarPrestadorDoUsuario(keycloakId);
+        return categoriaRepository.buscarPorPrestador(prestador.getId(), StatusCategoria.ATIVA, StatusServico.ATIVO);
     }
 
     @Transactional
