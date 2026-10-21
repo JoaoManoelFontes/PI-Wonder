@@ -440,6 +440,16 @@ Os critérios de erro deste guia fixam o status HTTP. A task não estabelece um 
 - Categorias do prestador pertencem a serviços ativos, são ativas e aparecem uma única vez.
 - Listas vazias e erros seguem os status documentados acima.
 
+## Consulta autenticada do próprio prestador — AUTH-LW-001
+
+`GET /catalogo/prestadores/me` exige JWT válido. É uma consulta do cadastro do usuário logado, separada das seis rotas públicas descritas neste guia.
+
+O identificador vem exclusivamente do `sub` do JWT: o backend localiza o prestador pelo vínculo com o perfil local e seu `keycloakId`. Não recebe ID de usuário ou prestador como parâmetro. Não exige aprovação prévia, permitindo consultar o próprio cadastro pendente, rejeitado, suspenso ou em rascunho, além do ativo.
+
+A resposta `200` usa os mesmos 13 campos de `PrestadorPublicResponse` do detalhe acima, com `status` e `ativo` reais do cadastro. Retorna `401` sem autenticação ou com identificador de usuário inválido no JWT, e `404` quando não existe prestador vinculado, inclusive quando não há perfil local. A consulta não cria perfil nem cadastro.
+
+As demais consultas públicas continuam sem exigir login. `CatalogoPrestadorLogadoIntegrationTest` verifica o isolamento entre usuários, os estados do cadastro, os campos da resposta e os erros; `PrestadorServiceTest` cobre a busca no service.
+
 ## Consultas de disponibilidade
 
 `GET /agendamentos/dias-disponiveis` e `GET /agendamentos/disponibilidade` estão implementados e permitem consulta sem login. A primeira recebe `prestador_id`, `servico_id` e `mes` (`yyyy-MM`); a segunda recebe `prestador_id`, `servico_id` e `data` (`yyyy-MM-dd`).

@@ -51,6 +51,9 @@ public interface PrestadorRepository extends JpaRepository<Prestador, Long> {
     Optional<Prestador> findByPerfilUsuarioId(UUID perfilUsuarioId);
 
     @EntityGraph(attributePaths = "perfilUsuario")
+    Optional<Prestador> findByPerfilUsuarioKeycloakId(UUID keycloakId);
+
+    @EntityGraph(attributePaths = "perfilUsuario")
     Optional<Prestador> findByIdAndStatusAndAtivoTrue(Long id, StatusPrestador status);
 
     @EntityGraph(attributePaths = "perfilUsuario")
