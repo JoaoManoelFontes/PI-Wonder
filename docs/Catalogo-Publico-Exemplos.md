@@ -528,6 +528,54 @@ Conforme a decisão adotada para o projeto novo, as categorias do prestador são
 
 `CatalogoCategoriasPrestadorLogadoIntegrationTest` cobre autenticação, isolamento entre usuários, filtros, ordenação, duplicação, estados do prestador e atualização das categorias a partir dos serviços. A consulta pública `GET /catalogo/prestadores/{prestador_id}/categorias` continua exigindo prestador publicável e funcionando sem login.
 
+## Gestão de serviços do próprio prestador — AUTH-LW-006
+
+As rotas abaixo exigem JWT do dono do prestador. São permitidas em cadastros `RASCUNHO`, `REJEITADO`, `ATIVO` e `SUSPENSO`; cadastros `PENDENTE` ficam bloqueados durante a análise, seguindo a regra de edição existente. Ter papel de admin não concede permissão para editar o cadastro de outro usuário por essas rotas.
+
+| Método e rota | Sucesso |
+| --- | --- |
+| `POST /catalogo/prestadores/{prestador_id}/servicos` | `201`, `ServicoPublicResponse` com o serviço criado como ativo. |
+| `PUT /catalogo/prestadores/{prestador_id}/servicos/{servico_id}` | `200`, `ServicoPublicResponse` atualizado. |
+| `DELETE /catalogo/prestadores/{prestador_id}/servicos/{servico_id}` | `204`, sem corpo; serviço inativado, sem exclusão física. |
+
+Corpo de criação:
+
+```json
+{
+  "nome": "Corte de cabelo",
+  "preco": 50.00,
+  "duracao_min": 45,
+  "categoria_id": 1
+}
+```
+
+`nome`, `preco` e `duracao_min` são obrigatórios na criação. O nome não pode estar em branco e aceita até 150 caracteres. O preço deve ser não negativo, com até oito dígitos inteiros e duas casas decimais. A duração é um inteiro positivo em minutos. A categoria é opcional; quando informada, seu ID deve ser positivo e identificar uma categoria ativa. O ID `1` do exemplo é ilustrativo: consulte as categorias do seu banco.
+
+Na edição, os mesmos campos são opcionais; valores omitidos ou `null` são preservados, inclusive a categoria. É possível trocar a categoria informando outro ID ativo. A foto, o dono e o status não são alterados pelo payload. Editar um serviço inativo não o reativa.
+
+Exemplo de edição parcial:
+
+```json
+{
+  "preco": 55.00,
+  "duracao_min": 60
+}
+```
+
+O DELETE mantém o serviço e seus vínculos no banco. Agendamentos `PENDENTE` ou `CONFIRMADO` desse serviço impedem a inativação, com retorno `409`. Agendamentos `CANCELADO` ou `CONCLUIDO` são preservados e não bloqueiam. Repetir o DELETE de serviço já inativo e sem agendamento aberto retorna `204`.
+
+Inativar um serviço o remove das consultas públicas de serviços ativos e da disponibilidade. As categorias do prestador são recalculadas a partir dos serviços ativos: inativar o último serviço de uma categoria a retira da listagem; mudar a categoria de um serviço também reflete na consulta.
+
+| Situação | Retorno |
+| --- | --- |
+| Sem autenticação | `401`. |
+| Usuário diferente do dono | `403`. |
+| Prestador inexistente, serviço inexistente ou serviço de outro prestador na URL informada | `404`. |
+| Prestador pendente de análise ou tentativa de inativar serviço com agendamento aberto | `409`. |
+| Campos inválidos, categoria inexistente/inativa ou ID malformado | `400`. |
+
+`ServicoPrestadorIntegrationTest` cobre criação, edição parcial, inativação, estados do prestador, limites dos campos, categorias derivadas, isolamento entre usuários e preservação dos agendamentos. As consultas GET públicas existentes continuam funcionando sem login.
+
 ## Consultas de disponibilidade
 
 `GET /agendamentos/dias-disponiveis` e `GET /agendamentos/disponibilidade` estão implementados e permitem consulta sem login. A primeira recebe `prestador_id`, `servico_id` e `mes` (`yyyy-MM`); a segunda recebe `prestador_id`, `servico_id` e `data` (`yyyy-MM-dd`).
