@@ -52,6 +52,12 @@ public class PrestadorService {
     }
 
     @Transactional(readOnly = true)
+    public Prestador buscarPrestadorDoUsuario(UUID keycloakId) {
+        return prestadorRepository.findByPerfilUsuarioKeycloakId(keycloakId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Prestador não encontrado"));
+    }
+
+    @Transactional(readOnly = true)
     public List<Prestador> listarSolicitacoesPendentes() {
         return prestadorRepository.findByStatusOrderByEnviadoEmAsc(StatusPrestador.PENDENTE);
     }

@@ -41,6 +41,25 @@ class PrestadorServiceTest {
     private PrestadorService prestadorService;
 
     @Test
+    void deveBuscarPrestadorVinculadoAoUsuarioAutenticadoSemFiltroDePublicacao() {
+        Prestador prestador = prestadorPendente();
+        when(prestadorRepository.findByPerfilUsuarioKeycloakId(KEYCLOAK_ID))
+                .thenReturn(Optional.of(prestador));
+
+        assertThat(prestadorService.buscarPrestadorDoUsuario(KEYCLOAK_ID)).isSameAs(prestador);
+    }
+
+    @Test
+    void deveRetornar404QuandoUsuarioNaoPossuiPrestador() {
+        when(prestadorRepository.findByPerfilUsuarioKeycloakId(KEYCLOAK_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> prestadorService.buscarPrestadorDoUsuario(KEYCLOAK_ID))
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
+                        assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+    }
+
+    @Test
     void deveCadastrarPrestadorInicialmenteInativo() {
         PerfilUsuario perfilUsuario = perfilUsuario();
         CadastroPrestadorRequest request = request();
