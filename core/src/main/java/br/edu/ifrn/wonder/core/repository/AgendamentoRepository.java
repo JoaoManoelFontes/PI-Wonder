@@ -6,8 +6,11 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Collection;
 
 public interface AgendamentoRepository extends JpaRepository<Agendamento, Long> {
+
+    boolean existsByServicoIdAndStatusIn(Long servicoId, Collection<StatusAgendamento> status);
 
     List<Agendamento> findByPrestadorIdAndInicioLessThanAndFimGreaterThanAndStatusNotOrderByInicioAsc(
             Long prestadorId,
