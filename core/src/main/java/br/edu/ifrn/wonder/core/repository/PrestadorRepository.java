@@ -6,8 +6,10 @@ import java.util.UUID;
 
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import jakarta.persistence.LockModeType;
 
 import br.edu.ifrn.wonder.core.domain.Prestador;
 import br.edu.ifrn.wonder.core.domain.StatusPrestador;
@@ -15,6 +17,10 @@ import br.edu.ifrn.wonder.core.domain.StatusCategoria;
 import br.edu.ifrn.wonder.core.domain.StatusServico;
 
 public interface PrestadorRepository extends JpaRepository<Prestador, Long> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT prestador FROM Prestador prestador WHERE prestador.id = :id")
+    Optional<Prestador> buscarPorIdComBloqueio(@Param("id") Long id);
 
     @EntityGraph(attributePaths = "perfilUsuario")
     List<Prestador> findByAtivoTrueAndStatusOrderByNomeEstabAsc(StatusPrestador status);

@@ -576,6 +576,41 @@ Inativar um serviço o remove das consultas públicas de serviços ativos e da d
 
 `ServicoPrestadorIntegrationTest` cobre criação, edição parcial, inativação, estados do prestador, limites dos campos, categorias derivadas, isolamento entre usuários e preservação dos agendamentos. As consultas GET públicas existentes continuam funcionando sem login.
 
+## Gestão de horários do próprio prestador — AUTH-LW-007
+
+As duas rotas exigem JWT do dono e seguem a regra de edição do cadastro: prestador pendente de análise não pode alterar os horários. Cadastros em rascunho, rejeitados, ativos ou suspensos podem ser alterados pelo dono. O papel de admin não permite modificar o horário de outro usuário por essas rotas.
+
+| Método e rota | Sucesso |
+| --- | --- |
+| `POST /catalogo/prestadores/{prestador_id}/horarios` | `201`, `HorarioAtendimentoPublicResponse` com cinco campos. |
+| `DELETE /catalogo/prestadores/{prestador_id}/horarios/{horario_id}` | `204`, sem corpo. |
+
+Exemplo de criação:
+
+```json
+{
+  "dia_semana": 1,
+  "hora_inicio": "09:00",
+  "hora_fim": "12:00"
+}
+```
+
+Os três campos são obrigatórios. `dia_semana` vai de 1 (segunda) a 7 (domingo). As horas são locais e aceitam `HH:mm` ou `HH:mm:ss`, sem frações de segundo. O início deve ser estritamente anterior ao fim, no mesmo dia. Para atendimento que atravesse a meia-noite, não é aceito um intervalo com início maior que o fim.
+
+Não são aceitos intervalos duplicados ou sobrepostos no mesmo dia do mesmo prestador. Intervalos adjacentes, como 09:00–12:00 e 12:00–14:00, e intervalos separados por pausas são permitidos. Horários em outro dia ou de outro prestador não geram conflito. O cadastro usa bloqueio transacional na linha do prestador para impedir que duas requisições simultâneas cadastrem sobreposições.
+
+O modelo atual não possui flag de ativação para horários. O DELETE remove apenas o intervalo de atendimento; não exclui nem cancela agendamentos existentes. As consultas públicas de horários e o cálculo de disponibilidade passam a refletir a agenda atualizada. A rota não altera os serviços nem o status do prestador.
+
+| Situação | Retorno |
+| --- | --- |
+| Sem autenticação | `401`. |
+| Usuário diferente do dono | `403`. |
+| Prestador ou horário inexistente; horário de outro prestador na URL informada | `404`. |
+| Cadastro pendente de análise ou intervalo duplicado/sobreposto | `409`. |
+| Campos ausentes, dia/hora inválidos, início maior ou igual ao fim ou ID malformado | `400`. |
+
+`HorarioPrestadorIntegrationTest` cobre os contratos, persistência, remoção, validações, permissões, limites das sobreposições, requisições concorrentes e preservação de agendamentos. O GET público de horários existente continua funcionando sem login para prestadores publicáveis.
+
 ## Consultas de disponibilidade
 
 `GET /agendamentos/dias-disponiveis` e `GET /agendamentos/disponibilidade` estão implementados e permitem consulta sem login. A primeira recebe `prestador_id`, `servico_id` e `mes` (`yyyy-MM`); a segunda recebe `prestador_id`, `servico_id` e `data` (`yyyy-MM-dd`).
