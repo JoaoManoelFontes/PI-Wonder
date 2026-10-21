@@ -482,6 +482,35 @@ Seguindo a regra do projeto antigo, cadastros `PENDENTE` não podem ser editados
 
 `CatalogoPrestadorEdicaoIntegrationTest` cobre persistência dos dados, edição parcial, propriedade, campos protegidos, limites de validação e estados do cadastro. As demais consultas públicas do catálogo permanecem sem login.
 
+## Envio e reenvio para aprovação — AUTH-LW-004
+
+`POST /catalogo/prestadores/{prestador_id}/enviar-aprovacao` exige JWT do dono do cadastro e não precisa de corpo. A resposta `200` usa `PrestadorPublicResponse`, com `status = "pendente"` e `ativo = false`.
+
+O cadastro inicial em `POST /prestadores` continua nascendo `PENDENTE`, conforme o fluxo atual. Esta rota permite enviar cadastros `RASCUNHO` e reenviar cadastros `REJEITADO` após correção; não permite novo envio de cadastro já pendente, ativo ou suspenso.
+
+Antes do envio, o cadastro precisa ter nome e documento preenchidos, ao menos um serviço ativo, uma categoria ativa vinculada a serviço ativo e um horário de atendimento. Serviços, categorias e horários de outros prestadores não atendem aos requisitos. No modelo atual, as categorias são derivadas dos serviços; não é criado um vínculo separado com o prestador.
+
+O envio registra uma nova data em `enviadoEm`, limpa o motivo de rejeição anterior e mantém o cadastro fora do catálogo público. A decisão continua nas rotas administrativas existentes. Não há aprovação automática nem alteração do proprietário.
+
+| Situação | Retorno |
+| --- | --- |
+| Dono autenticado, status permitido e cadastro completo | `200`, cadastro pendente. |
+| Sem autenticação | `401`. |
+| Usuário diferente do dono, inclusive admin nesta rota | `403`. |
+| Cadastro inexistente | `404`. |
+| Cadastro pendente, ativo ou suspenso; envio repetido | `409`. |
+| Requisitos incompletos ou ID inválido | `400`. |
+
+Exemplo de requisição autenticada:
+
+```http
+POST /catalogo/prestadores/1/enviar-aprovacao
+Authorization: Bearer <token-do-dono>
+Accept: application/json
+```
+
+`CatalogoPrestadorEnvioAprovacaoIntegrationTest` cobre envio, reenvio, requisitos, propriedade, persistência e integração com a listagem administrativa de solicitações pendentes.
+
 ## Consultas de disponibilidade
 
 `GET /agendamentos/dias-disponiveis` e `GET /agendamentos/disponibilidade` estão implementados e permitem consulta sem login. A primeira recebe `prestador_id`, `servico_id` e `mes` (`yyyy-MM`); a segunda recebe `prestador_id`, `servico_id` e `data` (`yyyy-MM-dd`).
