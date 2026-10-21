@@ -55,6 +55,8 @@ O `core` se comunica de forma assíncrona com `notification` e `worker` por meio
 | PostgreSQL | `5432` | `localhost:5432` |
 | RabbitMQ | `5672` | `localhost:5672` |
 | RabbitMQ Management | `15672` | `http://localhost:15672` |
+| MinIO | `9000` | `http://localhost:9000` |
+| MinIO Console | `9001` | `http://localhost:9001` |
 
 Os módulos `notification` e `worker` são consumidores de filas e não expõem portas no Docker Compose.
 
@@ -80,7 +82,7 @@ cd PI-Wonder
 
 ## 6. Executar pelo IntelliJ IDEA
 
-Neste modo, PostgreSQL e RabbitMQ executam pelo Docker, enquanto `core`, `notification` e `worker` executam diretamente pela IDE. Por isso, os hosts do arquivo `.env.dev` devem ser `localhost`.
+Neste modo, PostgreSQL, RabbitMQ e MinIO executam pelo Docker, enquanto `core`, `notification` e `worker` executam diretamente pela IDE. Por isso, os hosts do arquivo `.env.dev` devem ser `localhost`.
 
 ### 6.1. Configurar o `.env.dev`
 
@@ -158,7 +160,7 @@ docker compose down
 docker compose down -v
 ```
 
-> `docker compose down -v` remove os dados locais do PostgreSQL e do RabbitMQ. Use esse comando apenas quando desejar reiniciar completamente o ambiente.
+> `docker compose down -v` remove os dados locais do PostgreSQL, RabbitMQ e MinIO. Use esse comando apenas quando desejar reiniciar completamente o ambiente.
 
 ## 8. Testes
 

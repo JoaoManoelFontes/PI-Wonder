@@ -11,12 +11,24 @@ public record PerfilUsuarioResponse(
         String numeroTelefone
 ) {
 
-    public static PerfilUsuarioResponse from(PerfilUsuario perfilUsuario) {
+    public static PerfilUsuarioResponse from(PerfilUsuario perfilUsuario, String apiPublicUrl) {
         return new PerfilUsuarioResponse(
                 perfilUsuario.getId(),
                 perfilUsuario.getKeycloakId(),
-                perfilUsuario.getFotoUrl(),
+                montarFotoUrl(perfilUsuario, apiPublicUrl),
                 perfilUsuario.getNumeroTelefone()
         );
+    }
+
+    private static String montarFotoUrl(PerfilUsuario perfilUsuario, String apiPublicUrl) {
+        if (perfilUsuario.getFotoUrl() == null) {
+            return null;
+        }
+
+        String baseUrl = apiPublicUrl.endsWith("/")
+                ? apiPublicUrl.substring(0, apiPublicUrl.length() - 1)
+                : apiPublicUrl;
+
+        return "%s/perfis/%s/foto".formatted(baseUrl, perfilUsuario.getId());
     }
 }
