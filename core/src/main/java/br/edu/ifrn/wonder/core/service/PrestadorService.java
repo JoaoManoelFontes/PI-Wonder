@@ -13,6 +13,7 @@ import br.edu.ifrn.wonder.core.domain.PerfilUsuario;
 import br.edu.ifrn.wonder.core.domain.Prestador;
 import br.edu.ifrn.wonder.core.domain.StatusPrestador;
 import br.edu.ifrn.wonder.core.dto.CadastroPrestadorRequest;
+import br.edu.ifrn.wonder.core.dto.AtualizacaoPrestadorRequest;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
 import lombok.RequiredArgsConstructor;
 
@@ -55,6 +56,46 @@ public class PrestadorService {
     public Prestador buscarPrestadorDoUsuario(UUID keycloakId) {
         return prestadorRepository.findByPerfilUsuarioKeycloakId(keycloakId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Prestador não encontrado"));
+    }
+
+    @Transactional
+    public Prestador atualizarPrestador(Long prestadorId, UUID keycloakId, AtualizacaoPrestadorRequest request) {
+        Prestador prestador = prestadorRepository.findById(prestadorId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Prestador não encontrado"));
+
+        if (!prestador.getPerfilUsuario().getKeycloakId().equals(keycloakId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sem permissão para modificar este prestador");
+        }
+        if (prestador.getStatus() == StatusPrestador.PENDENTE) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cadastro pendente de análise não pode ser editado");
+        }
+
+        if (request.nomeEstab() != null) {
+            prestador.setNomeEstab(request.nomeEstab());
+        }
+        if (request.documento() != null) {
+            prestador.setDocumento(request.documento());
+        }
+        if (request.endereco() != null) {
+            prestador.setEndereco(request.endereco());
+        }
+        if (request.numero() != null) {
+            prestador.setNumero(request.numero());
+        }
+        if (request.bairro() != null) {
+            prestador.setBairro(request.bairro());
+        }
+        if (request.cidade() != null) {
+            prestador.setCidade(request.cidade());
+        }
+        if (request.estado() != null) {
+            prestador.setEstado(request.estado());
+        }
+        if (request.complemento() != null) {
+            prestador.setComplemento(request.complemento());
+        }
+
+        return prestador;
     }
 
     @Transactional(readOnly = true)

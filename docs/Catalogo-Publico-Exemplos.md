@@ -450,6 +450,38 @@ A resposta `200` usa os mesmos 13 campos de `PrestadorPublicResponse` do detalhe
 
 As demais consultas públicas continuam sem exigir login. `CatalogoPrestadorLogadoIntegrationTest` verifica o isolamento entre usuários, os estados do cadastro, os campos da resposta e os erros; `PrestadorServiceTest` cobre a busca no service.
 
+## Edição autenticada do próprio prestador — AUTH-LW-003
+
+`PUT /catalogo/prestadores/{prestador_id}` permite ao dono editar os dados do seu cadastro, usando o vínculo com o `sub` do JWT. O cadastro inicial existente continua em `POST /prestadores`; a rota de edição segue o plano de catálogo.
+
+O corpo usa `AtualizacaoPrestadorRequest`, com os campos opcionais `nomeEstab`, `documento`, `endereco`, `numero`, `bairro`, `cidade`, `estado` e `complemento`. Campos omitidos ou enviados como `null` mantêm o valor atual. Essa operação aceita edição parcial, como o cliente antigo; não utiliza os nomes antigos em snake_case. Se informado, `nomeEstab` não pode estar vazio ou conter somente espaços.
+
+Os limites são os mesmos do cadastro: nome, endereço e complemento com até 255 caracteres; documento com até 20; número com até 30; bairro e cidade com até 120; estado com até 2.
+
+Exemplo de corpo para alterar nome e cidade:
+
+```json
+{
+  "nomeEstab": "Studio Wonder atualizado",
+  "cidade": "Parnamirim"
+}
+```
+
+A resposta `200` usa `PrestadorPublicResponse`, com os dados atualizados. Proprietário, status, campo `ativo`, foto e informações de aprovação/rejeição não são editáveis por esse DTO. Campos extras no JSON não alteram esses dados. A atualização não cria perfil nem dispara aprovação automática.
+
+Seguindo a regra do projeto antigo, cadastros `PENDENTE` não podem ser editados durante a análise. São editáveis pelo dono os cadastros `RASCUNHO`, `REJEITADO`, `ATIVO` e `SUSPENSO`, sem mudança automática de publicação.
+
+| Situação | Retorno |
+| --- | --- |
+| Dono autenticado e dados válidos, em estado editável | `200`, objeto atualizado. |
+| Sem autenticação | `401`. |
+| Usuário diferente do dono, inclusive admin nesta rota | `403`. |
+| Cadastro inexistente | `404`. |
+| Cadastro pendente de análise | `409`. |
+| Campos inválidos, corpo inválido/ausente ou ID não numérico | `400`. |
+
+`CatalogoPrestadorEdicaoIntegrationTest` cobre persistência dos dados, edição parcial, propriedade, campos protegidos, limites de validação e estados do cadastro. As demais consultas públicas do catálogo permanecem sem login.
+
 ## Consultas de disponibilidade
 
 `GET /agendamentos/dias-disponiveis` e `GET /agendamentos/disponibilidade` estão implementados e permitem consulta sem login. A primeira recebe `prestador_id`, `servico_id` e `mes` (`yyyy-MM`); a segunda recebe `prestador_id`, `servico_id` e `data` (`yyyy-MM-dd`).
