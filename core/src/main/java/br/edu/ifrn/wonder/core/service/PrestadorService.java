@@ -1,6 +1,7 @@
 package br.edu.ifrn.wonder.core.service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -12,9 +13,14 @@ import org.springframework.web.server.ResponseStatusException;
 import br.edu.ifrn.wonder.core.domain.PerfilUsuario;
 import br.edu.ifrn.wonder.core.domain.Prestador;
 import br.edu.ifrn.wonder.core.domain.StatusPrestador;
+import br.edu.ifrn.wonder.core.domain.StatusCategoria;
+import br.edu.ifrn.wonder.core.domain.StatusServico;
 import br.edu.ifrn.wonder.core.dto.CadastroPrestadorRequest;
 import br.edu.ifrn.wonder.core.dto.AtualizacaoPrestadorRequest;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
+import br.edu.ifrn.wonder.core.repository.CategoriaRepository;
+import br.edu.ifrn.wonder.core.repository.ServicoRepository;
+import br.edu.ifrn.wonder.core.repository.HorarioAtendimentoRepository;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -23,6 +29,9 @@ public class PrestadorService {
 
     private final PerfilUsuarioService perfilUsuarioService;
     private final PrestadorRepository prestadorRepository;
+    private final CategoriaRepository categoriaRepository;
+    private final ServicoRepository servicoRepository;
+    private final HorarioAtendimentoRepository horarioAtendimentoRepository;
 
     @Transactional
     public Prestador cadastrarPrestador(UUID keycloakId, CadastroPrestadorRequest request) {
@@ -96,6 +105,48 @@ public class PrestadorService {
         }
 
         return prestador;
+    }
+
+    @Transactional
+    public Prestador enviarParaAprovacao(Long prestadorId, UUID keycloakId) {
+        Prestador prestador = prestadorRepository.findById(prestadorId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Prestador não encontrado"));
+
+        if (!prestador.getPerfilUsuario().getKeycloakId().equals(keycloakId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sem permissão para enviar este cadastro");
+        }
+        if (prestador.getStatus() != StatusPrestador.RASCUNHO && prestador.getStatus() != StatusPrestador.REJEITADO) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cadastro não pode ser enviado neste status");
+        }
+
+        validarRequisitosDeEnvio(prestador);
+        prestador.setStatus(StatusPrestador.PENDENTE);
+        prestador.setAtivo(false);
+        prestador.setEnviadoEm(LocalDateTime.now());
+        prestador.setMotivoRejeicao(null);
+        return prestador;
+    }
+
+    private void validarRequisitosDeEnvio(Prestador prestador) {
+        List<String> erros = new ArrayList<>();
+        if (prestador.getNomeEstab() == null || prestador.getNomeEstab().isBlank()) {
+            erros.add("Informe o nome do estabelecimento");
+        }
+        if (prestador.getDocumento() == null || prestador.getDocumento().isBlank()) {
+            erros.add("Informe o documento do estabelecimento");
+        }
+        if (servicoRepository.findByPrestadorIdAndStatusOrderByNomeAsc(prestador.getId(), StatusServico.ATIVO).isEmpty()) {
+            erros.add("Cadastre ao menos um serviço ativo");
+        }
+        if (categoriaRepository.buscarPorPrestador(prestador.getId(), StatusCategoria.ATIVA, StatusServico.ATIVO).isEmpty()) {
+            erros.add("Vincule ao menos uma categoria ativa a um serviço ativo do estabelecimento");
+        }
+        if (horarioAtendimentoRepository.findByPrestadorIdOrderByDiaSemanaAscHoraInicioAsc(prestador.getId()).isEmpty()) {
+            erros.add("Cadastre ao menos um horário de atendimento");
+        }
+        if (!erros.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, String.join("; ", erros));
+        }
     }
 
     @Transactional(readOnly = true)
