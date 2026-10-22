@@ -2,7 +2,7 @@
 
 Guia consolidado na LW-014, incluindo os exemplos de horários e categorias do prestador documentados na LW-012.
 
-Os seis endpoints abaixo permitem consulta sem login. Envie os comandos sem header `Authorization` para validar o acesso público. As listagens retornam arrays JSON; o detalhe retorna um objeto. O prestador precisa ter `status = ATIVO` e `ativo = true` para aparecer no catálogo público.
+Os seis endpoints de dados abaixo permitem consulta sem login. Envie os comandos sem header `Authorization` para validar o acesso público. As listagens retornam arrays JSON; o detalhe retorna um objeto. O prestador precisa ter `status = ATIVO` e `ativo = true` para aparecer no catálogo público. A consulta adicional da imagem está descrita em [Foto do prestador](#foto-do-prestador).
 
 | Método e rota | Resposta de sucesso |
 | --- | --- |
@@ -497,6 +497,39 @@ Seguindo a regra do projeto antigo, cadastros `PENDENTE` não podem ser editados
 | Campos inválidos, corpo inválido/ausente ou ID não numérico | `400`. |
 
 `CatalogoPrestadorEdicaoIntegrationTest` cobre persistência dos dados, edição parcial, propriedade, campos protegidos, limites de validação e estados do cadastro. As demais consultas públicas do catálogo permanecem sem login.
+
+## Foto do prestador
+
+`POST /catalogo/prestadores/{prestador_id}/foto` exige JWT do dono e `multipart/form-data` com a parte obrigatória `file`, preservando o nome utilizado pelo aplicativo antigo. O upload retorna `200` com `PrestadorPublicResponse`, incluindo `fotoUrl` absoluto, montado com `wonder.api.public-url` (`APP_PUBLIC_URL`). O contrato mantém os mesmos 13 campos.
+
+São aceitos JPEG, PNG e WebP até 5 MB (5.242.880 bytes), inclusive. O backend verifica o tipo MIME e a assinatura inicial correspondente; não faz decodificação, redimensionamento nem conversão da imagem. Nome e extensão do arquivo não definem o objeto no armazenamento.
+
+O arquivo é salvo no bucket MinIO já configurado, no objeto `prestadores/{prestador_id}/foto`. Um novo upload substitui o mesmo objeto, sem acumular arquivos por nome original. O banco mantém a URL HTTP da foto; a foto do perfil do usuário, o estado de publicação e os dados de aprovação não são alterados. URLs externas cadastradas anteriormente permanecem válidas nos DTOs até serem substituídas por um upload.
+
+Exemplo no PowerShell, com `$token` contendo o JWT do dono:
+
+```powershell
+$prestadorId = 1
+curl.exe -X POST "http://localhost:8080/catalogo/prestadores/$prestadorId/foto" `
+  -H "Authorization: Bearer $token" `
+  -F "file=@C:/imagens/studio.png;type=image/png"
+```
+
+| Situação do upload | Retorno |
+| --- | --- |
+| Dono e arquivo válido, em estado editável | `200`, cadastro com `fotoUrl` atualizado. |
+| Sem autenticação | `401`. |
+| Outro usuário, inclusive administrador | `403`. |
+| Prestador inexistente | `404`. |
+| Cadastro `PENDENTE` | `409`, seguindo a regra de edição durante análise. |
+| Parte `file` ausente, arquivo vazio, formato ou assinatura incompatível | `400`. |
+| Arquivo acima de 5 MB | `413`. |
+| Corpo sem `multipart/form-data` | `415`. |
+| MinIO indisponível | `503`; a URL anterior é preservada. |
+
+`GET /catalogo/prestadores/{prestador_id}/foto` entrega os bytes, o `Content-Type` original, `Content-Length`, `X-Content-Type-Options: nosniff` e `Cache-Control: no-store`. A consulta é pública somente com `status = ATIVO` e `ativo = true`. Para cadastros não publicados, exige JWT do dono ou de administrador; para os demais retorna `404`. Prestador sem foto enviada por este fluxo ou inexistente também retorna `404`. A rota não busca URLs externas nem redireciona o cliente ao MinIO.
+
+`CatalogoPrestadorFotoIntegrationTest` valida upload, substituição, consulta, persistência, formatos, limites, permissões e estados com PostgreSQL e MinIO reais via Testcontainers. `PrestadorFotoServiceTest` valida a preservação da URL em falhas de armazenamento e as verificações de acesso antes de usar o MinIO.
 
 ## Envio e reenvio para aprovação — AUTH-LW-004
 
