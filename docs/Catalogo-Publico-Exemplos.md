@@ -396,9 +396,34 @@ Cada item mantém os quatro campos do contrato anterior, sem incluir dados do cl
 
 A migration `V7__create_avaliacoes_table.sql` cria a tabela com FK para um agendamento existente, nota entre 1 e 5 e uma avaliação por agendamento. No novo banco único, o prestador é derivado do agendamento; não é gravado um segundo `prestador_id` na avaliação. Isso mantém o vínculo consistente e preserva a resposta HTTP. A inativação posterior do serviço não retira avaliações históricas da listagem.
 
-Esta entrega implementa a leitura. A criação pelo cliente e a validação de agendamento concluído ficam na próxima task de `POST /catalogo/prestadores/{prestador_id}/avaliacoes`. Os testes desta listagem inserem avaliações diretamente no banco de teste, usando agendamentos concluídos.
+Os testes desta listagem inserem avaliações diretamente no banco de teste, usando agendamentos concluídos. A criação pela API está descrita abaixo.
 
 `CatalogoAvaliacoesIntegrationTest` verifica contrato, ordenação, isolamento entre prestadores, publicação, listas vazias, entradas inválidas e restrições da migration com PostgreSQL real via Testcontainers.
+
+### Criar avaliação
+
+`POST /catalogo/prestadores/{prestador_id}/avaliacoes` exige JWT do cliente do agendamento. Dono do prestador e administrador não podem avaliar em nome de outro cliente. O identificador do cliente vem do JWT, sem campo de autoria no corpo.
+
+Exemplo com token e IDs de um atendimento real já concluído (o seed não contém agendamento concluído):
+
+```powershell
+$corpo = @{ agendamento_id = $agendamentoId; nota = 5 } | ConvertTo-Json
+Invoke-RestMethod -Method Post `
+  -Uri "http://localhost:8080/catalogo/prestadores/$prestadorId/avaliacoes" `
+  -Headers @{ Authorization = "Bearer $token" } `
+  -ContentType 'application/json' -Body $corpo
+```
+
+- Retorna `201` com os mesmos quatro campos da consulta: `id`, `agendamento_id`, `prestador_id`, `nota`.
+- `agendamento_id` é obrigatório e positivo; `nota` é obrigatória, entre 1 e 5. Corpo inválido ou ID de rota que não possa ser convertido em `Long` retorna `400`.
+- Sem JWT, ou com identificador de usuário inválido, retorna `401`. Outro usuário, inclusive administrador ou dono do prestador, recebe `403`.
+- Agendamento inexistente ou que não pertence ao prestador da rota retorna `404`.
+- Agendamento `PENDENTE`, `CONFIRMADO` ou `CANCELADO` retorna `409`. Somente `CONCLUIDO` pode ser avaliado.
+- Agendamento já avaliado retorna `409`, preservando a nota original. O bloqueio transacional do agendamento serializa duas criações simultâneas; a restrição única da V7 permanece como proteção no banco.
+- A avaliação se refere ao atendimento concluído: a inativação posterior do prestador ou serviço não impede o cliente de avaliar. Isso não publica o prestador novamente; o GET público continua exigindo `ATIVO` e `ativo = true`.
+- Não altera agendamento, serviço ou cadastro do prestador. Não adiciona migration nem muda seeds.
+
+`CadastroAvaliacaoIntegrationTest` valida autoria, conclusão, contrato, entradas inválidas, duplicidade e requisições simultâneas com PostgreSQL real via Testcontainers.
 
 ## Listas vazias e erros
 
