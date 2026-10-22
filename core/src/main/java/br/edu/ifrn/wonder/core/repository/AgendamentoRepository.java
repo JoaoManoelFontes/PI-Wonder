@@ -22,6 +22,8 @@ public interface AgendamentoRepository extends JpaRepository<Agendamento, Long> 
 
     boolean existsByServicoIdAndStatusIn(Long servicoId, Collection<StatusAgendamento> status);
 
+    boolean existsByPrestadorIdAndStatusIn(Long prestadorId, Collection<StatusAgendamento> status);
+
     List<Agendamento> findByPrestadorIdAndInicioLessThanAndFimGreaterThanAndStatusNotOrderByInicioAsc(
             Long prestadorId,
             LocalDateTime fim,

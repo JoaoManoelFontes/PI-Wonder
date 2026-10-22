@@ -14,11 +14,13 @@ import br.edu.ifrn.wonder.core.domain.PerfilUsuario;
 import br.edu.ifrn.wonder.core.domain.Categoria;
 import br.edu.ifrn.wonder.core.domain.Prestador;
 import br.edu.ifrn.wonder.core.domain.StatusPrestador;
+import br.edu.ifrn.wonder.core.domain.StatusAgendamento;
 import br.edu.ifrn.wonder.core.domain.StatusCategoria;
 import br.edu.ifrn.wonder.core.domain.StatusServico;
 import br.edu.ifrn.wonder.core.dto.CadastroPrestadorRequest;
 import br.edu.ifrn.wonder.core.dto.AtualizacaoPrestadorRequest;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
+import br.edu.ifrn.wonder.core.repository.AgendamentoRepository;
 import br.edu.ifrn.wonder.core.repository.CategoriaRepository;
 import br.edu.ifrn.wonder.core.repository.ServicoRepository;
 import br.edu.ifrn.wonder.core.repository.HorarioAtendimentoRepository;
@@ -33,6 +35,7 @@ public class PrestadorService {
     private final CategoriaRepository categoriaRepository;
     private final ServicoRepository servicoRepository;
     private final HorarioAtendimentoRepository horarioAtendimentoRepository;
+    private final AgendamentoRepository agendamentoRepository;
 
     @Transactional
     public Prestador cadastrarPrestador(UUID keycloakId, CadastroPrestadorRequest request) {
@@ -76,8 +79,7 @@ public class PrestadorService {
 
     @Transactional
     public Prestador atualizarPrestador(Long prestadorId, UUID keycloakId, AtualizacaoPrestadorRequest request) {
-        Prestador prestador = prestadorRepository.findById(prestadorId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Prestador não encontrado"));
+        Prestador prestador = buscarPrestadorParaAlteracao(prestadorId);
 
         if (!prestador.getPerfilUsuario().getKeycloakId().equals(keycloakId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sem permissão para modificar este prestador");
@@ -116,8 +118,7 @@ public class PrestadorService {
 
     @Transactional
     public Prestador enviarParaAprovacao(Long prestadorId, UUID keycloakId) {
-        Prestador prestador = prestadorRepository.findById(prestadorId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Prestador não encontrado"));
+        Prestador prestador = buscarPrestadorParaAlteracao(prestadorId);
 
         if (!prestador.getPerfilUsuario().getKeycloakId().equals(keycloakId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sem permissão para enviar este cadastro");
@@ -132,6 +133,28 @@ public class PrestadorService {
         prestador.setEnviadoEm(LocalDateTime.now());
         prestador.setMotivoRejeicao(null);
         return prestador;
+    }
+
+    @Transactional
+    public void inativar(Long prestadorId, UUID keycloakId) {
+        Prestador prestador = buscarPrestadorParaAlteracao(prestadorId);
+
+        if (!prestador.getPerfilUsuario().getKeycloakId().equals(keycloakId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sem permissão para modificar este prestador");
+        }
+        if (prestador.getStatus() == StatusPrestador.PENDENTE) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cadastro pendente de análise não pode ser editado");
+        }
+        if (agendamentoRepository.existsByPrestadorIdAndStatusIn(prestadorId,
+                List.of(StatusAgendamento.PENDENTE, StatusAgendamento.CONFIRMADO))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Prestador possui agendamentos em aberto");
+        }
+        prestador.setAtivo(false);
+    }
+
+    private Prestador buscarPrestadorParaAlteracao(Long prestadorId) {
+        return prestadorRepository.buscarPorIdComBloqueio(prestadorId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Prestador não encontrado"));
     }
 
     private void validarRequisitosDeEnvio(Prestador prestador) {
@@ -174,7 +197,7 @@ public class PrestadorService {
 
     @Transactional
     public Prestador aprovarSolicitacao(Long id, UUID adminId) {
-        Prestador prestador = buscarSolicitacaoPendente(id);
+        Prestador prestador = validarSolicitacaoPendente(buscarPrestadorParaAlteracao(id));
 
         prestador.setStatus(StatusPrestador.ATIVO);
         prestador.setAtivo(true);
@@ -187,7 +210,7 @@ public class PrestadorService {
 
     @Transactional
     public Prestador reprovarSolicitacao(Long id, UUID adminId) {
-        Prestador prestador = buscarSolicitacaoPendente(id);
+        Prestador prestador = validarSolicitacaoPendente(buscarPrestadorParaAlteracao(id));
 
         prestador.setStatus(StatusPrestador.REJEITADO);
         prestador.setAtivo(false);
@@ -202,6 +225,10 @@ public class PrestadorService {
         Prestador prestador = prestadorRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Prestador não encontrado"));
 
+        return validarSolicitacaoPendente(prestador);
+    }
+
+    private Prestador validarSolicitacaoPendente(Prestador prestador) {
         if (prestador.getStatus() != StatusPrestador.PENDENTE) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Solicitação não está pendente");
         }
