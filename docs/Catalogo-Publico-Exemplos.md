@@ -552,6 +552,30 @@ Seguindo a regra do projeto antigo, cadastros `PENDENTE` não podem ser editados
 
 `CatalogoPrestadorEdicaoIntegrationTest` cobre persistência dos dados, edição parcial, propriedade, campos protegidos, limites de validação e estados do cadastro. As demais consultas públicas do catálogo permanecem sem login.
 
+## Inativação do próprio prestador
+
+`DELETE /catalogo/prestadores/{prestador_id}` exige JWT do proprietário e retorna `204`, sem corpo. A operação marca `ativo = false`; não exclui o cadastro nem altera seu status de aprovação.
+
+```powershell
+Invoke-RestMethod -Method Delete `
+  -Uri "http://localhost:8080/catalogo/prestadores/$prestadorId" `
+  -Headers @{ Authorization = "Bearer $token" }
+```
+
+- Sem JWT ou com identificador de usuário inválido: `401`.
+- Outro usuário, inclusive administrador, não pode inativar em nome do dono nesta rota: `403`.
+- Prestador inexistente: `404`. ID de rota não numérico ou fora do limite de `Long`: `400`.
+- Cadastro `PENDENTE` de análise: `409`, seguindo o bloqueio das demais alterações do dono.
+- Qualquer agendamento `PENDENTE` ou `CONFIRMADO` do prestador, independentemente do serviço: `409`. Resolva os agendamentos antes de inativar; a rota não os cancela automaticamente.
+- Agendamentos `CANCELADO` ou `CONCLUIDO` não bloqueiam. Agendamentos de outros prestadores não interferem.
+- Repetir o DELETE de cadastro já inativo, fora de análise e sem agendamentos abertos, retorna `204`.
+
+Perfil do usuário, serviços e suas categorias, horários, fotos e URLs, agendamentos, avaliações e metadados de aprovação são preservados. Apenas `ativo` e o timestamp de atualização do cadastro podem mudar. Não há nova migration nem alteração dos seeds.
+
+Após inativar, o prestador deixa a listagem pública; detalhe, serviços, categorias, horários, avaliações e disponibilidade desse prestador retornam `404`. O dono continua consultando o cadastro em `GET /catalogo/prestadores/me`. A edição de cadastro não reativa o prestador; esta rota não adiciona um fluxo de reativação.
+
+A operação usa transação e bloqueio de escrita do cadastro existente. Edição, envio para aprovação e análise administrativa usam o mesmo bloqueio para evitar que uma gravação com dados antigos restaure a publicação após a inativação. `CatalogoPrestadorInativacaoIntegrationTest` valida autorização, estados, agendamentos abertos, repetição, edição simultânea, preservação do histórico e consultas públicas com PostgreSQL real via Testcontainers.
+
 ## Foto do prestador
 
 `POST /catalogo/prestadores/{prestador_id}/foto` exige JWT do dono e `multipart/form-data` com a parte obrigatória `file`, preservando o nome utilizado pelo aplicativo antigo. O upload retorna `200` com `PrestadorPublicResponse`, incluindo `fotoUrl` absoluto, montado com `wonder.api.public-url` (`APP_PUBLIC_URL`). O contrato mantém os mesmos 13 campos.

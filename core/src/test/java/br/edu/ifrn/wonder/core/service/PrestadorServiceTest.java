@@ -150,7 +150,7 @@ class PrestadorServiceTest {
     void deveAprovarSolicitacaoPendente() {
         Prestador prestador = prestadorPendente();
 
-        when(prestadorRepository.findById(1L))
+        when(prestadorRepository.buscarPorIdComBloqueio(1L))
                 .thenReturn(Optional.of(prestador));
 
         Prestador resultado = prestadorService.aprovarSolicitacao(1L, KEYCLOAK_ID);
@@ -166,7 +166,7 @@ class PrestadorServiceTest {
     void deveReprovarSolicitacaoPendente() {
         Prestador prestador = prestadorPendente();
 
-        when(prestadorRepository.findById(1L))
+        when(prestadorRepository.buscarPorIdComBloqueio(1L))
                 .thenReturn(Optional.of(prestador));
 
         Prestador resultado = prestadorService.reprovarSolicitacao(1L, KEYCLOAK_ID);
@@ -193,7 +193,7 @@ class PrestadorServiceTest {
         Prestador prestador = prestadorPendente();
         prestador.setStatus(StatusPrestador.ATIVO);
 
-        when(prestadorRepository.findById(1L))
+        when(prestadorRepository.buscarPorIdComBloqueio(1L))
                 .thenReturn(Optional.of(prestador));
 
         assertThatThrownBy(() -> prestadorService.aprovarSolicitacao(1L, KEYCLOAK_ID))
