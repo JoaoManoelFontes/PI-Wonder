@@ -17,7 +17,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/prestadores")
+@RequestMapping("/catalogo/prestadores")
 public class PrestadorController {
 
     private final UsuarioAutenticadoProvider usuarioAutenticadoProvider;

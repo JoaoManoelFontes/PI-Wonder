@@ -440,6 +440,22 @@ Os critérios de erro deste guia fixam o status HTTP. A task não estabelece um 
 - Categorias do prestador pertencem a serviços ativos, são ativas e aparecem uma única vez.
 - Listas vazias e erros seguem os status documentados acima.
 
+## Cadastro autenticado do prestador
+
+`POST /catalogo/prestadores` cadastra o prestador vinculado ao usuário identificado pelo `sub` do JWT. A rota segue o plano de migração e o consumo do aplicativo; substitui o antigo `POST /prestadores`.
+
+O corpo usa `CadastroPrestadorRequest`: `nomeEstab` é obrigatório; os demais campos são `documento`, `endereco`, `numero`, `bairro`, `cidade`, `estado`, `complemento` e `fotoUrl`, com os limites já definidos no DTO. Exemplo mínimo:
+
+```json
+{
+  "nomeEstab": "Studio Wonder"
+}
+```
+
+Retorna `201` com os 13 campos de `PrestadorPublicResponse`. O cadastro nasce `PENDENTE`, com `ativo = false` e data de envio registrada, preservando o fluxo existente. Identidade, status e publicação não podem ser escolhidos no payload. Retorna `401` sem login, `400` para dados inválidos e `409` se o usuário já possuir cadastro.
+
+`CadastroPrestadorIntegrationTest` verifica a rota autenticada, vínculo do dono, estado inicial, contrato da resposta, validação, duplicidade e substituição da rota antiga. As consultas GET públicas continuam sem exigir login.
+
 ## Consulta autenticada do próprio prestador — AUTH-LW-001
 
 `GET /catalogo/prestadores/me` exige JWT válido. É uma consulta do cadastro do usuário logado, separada das seis rotas públicas descritas neste guia.
@@ -452,7 +468,7 @@ As demais consultas públicas continuam sem exigir login. `CatalogoPrestadorLoga
 
 ## Edição autenticada do próprio prestador — AUTH-LW-003
 
-`PUT /catalogo/prestadores/{prestador_id}` permite ao dono editar os dados do seu cadastro, usando o vínculo com o `sub` do JWT. O cadastro inicial existente continua em `POST /prestadores`; a rota de edição segue o plano de catálogo.
+`PUT /catalogo/prestadores/{prestador_id}` permite ao dono editar os dados do seu cadastro, usando o vínculo com o `sub` do JWT. O cadastro inicial é realizado em `POST /catalogo/prestadores`.
 
 O corpo usa `AtualizacaoPrestadorRequest`, com os campos opcionais `nomeEstab`, `documento`, `endereco`, `numero`, `bairro`, `cidade`, `estado` e `complemento`. Campos omitidos ou enviados como `null` mantêm o valor atual. Essa operação aceita edição parcial, como o cliente antigo; não utiliza os nomes antigos em snake_case. Se informado, `nomeEstab` não pode estar vazio ou conter somente espaços.
 
@@ -486,7 +502,7 @@ Seguindo a regra do projeto antigo, cadastros `PENDENTE` não podem ser editados
 
 `POST /catalogo/prestadores/{prestador_id}/enviar-aprovacao` exige JWT do dono do cadastro e não precisa de corpo. A resposta `200` usa `PrestadorPublicResponse`, com `status = "pendente"` e `ativo = false`.
 
-O cadastro inicial em `POST /prestadores` continua nascendo `PENDENTE`, conforme o fluxo atual. Esta rota permite enviar cadastros `RASCUNHO` e reenviar cadastros `REJEITADO` após correção; não permite novo envio de cadastro já pendente, ativo ou suspenso.
+O cadastro inicial em `POST /catalogo/prestadores` continua nascendo `PENDENTE`, conforme o fluxo atual. Esta rota permite enviar cadastros `RASCUNHO` e reenviar cadastros `REJEITADO` após correção; não permite novo envio de cadastro já pendente, ativo ou suspenso.
 
 Antes do envio, o cadastro precisa ter nome e documento preenchidos, ao menos um serviço ativo, uma categoria ativa vinculada a serviço ativo e um horário de atendimento. Serviços, categorias e horários de outros prestadores não atendem aos requisitos. No modelo atual, as categorias são derivadas dos serviços; não é criado um vínculo separado com o prestador.
 
