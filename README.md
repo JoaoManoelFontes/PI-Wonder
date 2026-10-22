@@ -182,7 +182,7 @@ Os testes de integração utilizam Testcontainers e, portanto, podem exigir que 
 
 ## 9. Documentação
 
-Exemplos da API atual: [catálogo público](docs/Catalogo-Publico-Exemplos.md), com requests, respostas JSON, filtros, critérios de aceite e comandos de validação dos seis endpoints existentes (LW-012 e LW-014).
+Exemplos da API atual: [catálogo](docs/Catalogo-Publico-Exemplos.md), com consultas públicas, operações autenticadas do prestador, upload de foto e comandos de validação.
 
 Disponibilidade: [exemplos das consultas de dias e horários livres](docs/Disponibilidade-Exemplos.md), com acesso sem login, parâmetros, respostas do seed, conflitos, listas vazias e critérios de validação (LW-015 e JN-015).
 
