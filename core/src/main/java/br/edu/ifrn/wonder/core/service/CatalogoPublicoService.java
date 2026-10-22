@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import br.edu.ifrn.wonder.core.domain.Avaliacao;
 import br.edu.ifrn.wonder.core.domain.Categoria;
 import br.edu.ifrn.wonder.core.domain.HorarioAtendimento;
 import br.edu.ifrn.wonder.core.domain.Prestador;
@@ -14,6 +15,7 @@ import br.edu.ifrn.wonder.core.domain.Servico;
 import br.edu.ifrn.wonder.core.domain.StatusCategoria;
 import br.edu.ifrn.wonder.core.domain.StatusPrestador;
 import br.edu.ifrn.wonder.core.domain.StatusServico;
+import br.edu.ifrn.wonder.core.repository.AvaliacaoRepository;
 import br.edu.ifrn.wonder.core.repository.CategoriaRepository;
 import br.edu.ifrn.wonder.core.repository.HorarioAtendimentoRepository;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
@@ -29,6 +31,7 @@ public class CatalogoPublicoService {
     private final PrestadorRepository prestadorRepository;
     private final ServicoRepository servicoRepository;
     private final HorarioAtendimentoRepository horarioAtendimentoRepository;
+    private final AvaliacaoRepository avaliacaoRepository;
 
     public List<Categoria> listarCategoriasAtivas() {
         return categoriaRepository.findByStatusOrderByNomeAsc(StatusCategoria.ATIVA);
@@ -79,5 +82,10 @@ public class CatalogoPublicoService {
     public List<Servico> listarServicosDoPrestador(Long prestadorId) {
         buscarPrestadorPublico(prestadorId);
         return servicoRepository.findByPrestadorIdAndStatusOrderByNomeAsc(prestadorId, StatusServico.ATIVO);
+    }
+
+    public List<Avaliacao> listarAvaliacoesDoPrestador(Long prestadorId) {
+        buscarPrestadorPublico(prestadorId);
+        return avaliacaoRepository.findByAgendamentoPrestadorIdOrderByIdAsc(prestadorId);
     }
 }

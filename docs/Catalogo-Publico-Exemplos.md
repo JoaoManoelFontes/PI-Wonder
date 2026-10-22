@@ -2,7 +2,7 @@
 
 Guia consolidado na LW-014, incluindo os exemplos de horários e categorias do prestador documentados na LW-012.
 
-Os seis endpoints de dados abaixo permitem consulta sem login. Envie os comandos sem header `Authorization` para validar o acesso público. As listagens retornam arrays JSON; o detalhe retorna um objeto. O prestador precisa ter `status = ATIVO` e `ativo = true` para aparecer no catálogo público. A consulta adicional da imagem está descrita em [Foto do prestador](#foto-do-prestador).
+Os sete endpoints de dados abaixo permitem consulta sem login. Envie os comandos sem header `Authorization` para validar o acesso público. As listagens retornam arrays JSON; o detalhe retorna um objeto. O prestador precisa ter `status = ATIVO` e `ativo = true` para aparecer no catálogo público. As consultas de imagem estão descritas em [Foto do prestador](#foto-do-prestador) e [Foto do serviço](#foto-do-serviço).
 
 | Método e rota | Resposta de sucesso |
 | --- | --- |
@@ -12,6 +12,7 @@ Os seis endpoints de dados abaixo permitem consulta sem login. Envie os comandos
 | `GET /catalogo/prestadores/{prestador_id}/servicos` | Array de serviços ativos do prestador, ordenados por nome. |
 | `GET /catalogo/prestadores/{prestador_id}/horarios` | Array de intervalos, ordenados por dia e hora de início. |
 | `GET /catalogo/prestadores/{prestador_id}/categorias` | Array de categorias ativas vinculadas a serviços ativos do prestador, ordenadas por nome e sem repetições. |
+| `GET /catalogo/prestadores/{prestador_id}/avaliacoes` | Array de avaliações do prestador, ordenadas por ID crescente. |
 
 ## Preparação
 
@@ -372,6 +373,33 @@ A associação usa o vínculo existente no modelo atual: `servico.prestador` e `
 
 A resposta é um array direto de categorias, como no exemplo. Mesmo que vários serviços utilizem a mesma categoria, ela aparece uma única vez.
 
+## Avaliações do prestador
+
+`GET /catalogo/prestadores/{prestador_id}/avaliacoes` lista avaliações sem login, somente de prestadores com `status = ATIVO` e `ativo = true`. Retorna `200` com array ordenado por `id` crescente; sem avaliações, retorna `[]`. Prestador inexistente ou não publicado retorna `404`, inclusive para dono e administrador nesta consulta pública. ID não numérico ou fora do limite de `Long` retorna `400`.
+
+```powershell
+Invoke-RestMethod 'http://localhost:8080/catalogo/prestadores/1/avaliacoes'
+```
+
+Cada item mantém os quatro campos do contrato anterior, sem incluir dados do cliente ou entidades internas. Exemplo ilustrativo, sem acrescentar avaliações ao seed:
+
+```json
+[
+  {
+    "id": 1,
+    "agendamento_id": 3,
+    "prestador_id": 1,
+    "nota": 5
+  }
+]
+```
+
+A migration `V7__create_avaliacoes_table.sql` cria a tabela com FK para um agendamento existente, nota entre 1 e 5 e uma avaliação por agendamento. No novo banco único, o prestador é derivado do agendamento; não é gravado um segundo `prestador_id` na avaliação. Isso mantém o vínculo consistente e preserva a resposta HTTP. A inativação posterior do serviço não retira avaliações históricas da listagem.
+
+Esta entrega implementa a leitura. A criação pelo cliente e a validação de agendamento concluído ficam na próxima task de `POST /catalogo/prestadores/{prestador_id}/avaliacoes`. Os testes desta listagem inserem avaliações diretamente no banco de teste, usando agendamentos concluídos.
+
+`CatalogoAvaliacoesIntegrationTest` verifica contrato, ordenação, isolamento entre prestadores, publicação, listas vazias, entradas inválidas e restrições da migration com PostgreSQL real via Testcontainers.
+
 ## Listas vazias e erros
 
 | Consulta | Retorno sem correspondência | Entrada inválida |
@@ -430,7 +458,7 @@ Os critérios de erro deste guia fixam o status HTTP. A task não estabelece um 
 
 ## Critérios para revisão nas issues
 
-- As seis rotas existentes respondem sem token para dados públicos.
+- As sete consultas de dados respondem sem token para dados públicos.
 - Categorias gerais exibem somente categorias ativas, ordenadas por nome.
 - Prestadores exibem somente registros com `status = ATIVO` e `ativo = true`, ordenados por nome do estabelecimento.
 - Os filtros `nome` e `categoria_id` funcionam isoladamente e em conjunto, preservando os critérios de publicação.
@@ -438,6 +466,7 @@ Os critérios de erro deste guia fixam o status HTTP. A task não estabelece um 
 - Serviços pertencem ao prestador consultado, têm status ativo e são ordenados por nome.
 - Horários pertencem ao prestador consultado e são ordenados por dia e hora.
 - Categorias do prestador pertencem a serviços ativos, são ativas e aparecem uma única vez.
+- Avaliações pertencem aos agendamentos do prestador consultado e são ordenadas por ID.
 - Listas vazias e erros seguem os status documentados acima.
 
 ## Cadastro autenticado do prestador
@@ -458,7 +487,7 @@ Retorna `201` com os 13 campos de `PrestadorPublicResponse`. O cadastro nasce `P
 
 ## Consulta autenticada do próprio prestador — AUTH-LW-001
 
-`GET /catalogo/prestadores/me` exige JWT válido. É uma consulta do cadastro do usuário logado, separada das seis rotas públicas descritas neste guia.
+`GET /catalogo/prestadores/me` exige JWT válido. É uma consulta do cadastro do usuário logado, separada das consultas públicas descritas neste guia.
 
 O identificador vem exclusivamente do `sub` do JWT: o backend localiza o prestador pelo vínculo com o perfil local e seu `keycloakId`. Não recebe ID de usuário ou prestador como parâmetro. Não exige aprovação prévia, permitindo consultar o próprio cadastro pendente, rejeitado, suspenso ou em rascunho, além do ativo.
 
@@ -698,7 +727,7 @@ Os horários retornados por `/catalogo/prestadores/{prestador_id}/horarios` repr
 
 ## Validação automatizada
 
-Os testes `CatalogoCategoriasIntegrationTest`, `CatalogoPrestadoresIntegrationTest` e `CatalogoPrestadorIntegrationTest` cobrem as listagens gerais, filtros e detalhe. O `CatalogoFrontendContractIntegrationTest` confere os formatos das fixtures de consumo com cinco das seis rotas: categorias gerais, prestadores, detalhe, horários e categorias do prestador. A rota de serviços ainda não faz parte dessa comparação compartilhada.
+Os testes `CatalogoCategoriasIntegrationTest`, `CatalogoPrestadoresIntegrationTest` e `CatalogoPrestadorIntegrationTest` cobrem as listagens gerais, filtros e detalhe. O `CatalogoFrontendContractIntegrationTest` confere os formatos das fixtures de consumo com cinco das seis consultas originais: categorias gerais, prestadores, detalhe, horários e categorias do prestador. Serviços e avaliações são validados em seus testes de integração próprios e não fazem parte dessa comparação compartilhada.
 
 O `CatalogoServicosIntegrationTest` valida o endpoint de serviços sem login, os oito campos do DTO, vínculo com o prestador, filtro de serviços ativos, ordenação, lista vazia e `404` para prestadores inexistentes ou indisponíveis.
 

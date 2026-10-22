@@ -78,7 +78,7 @@ Os testes verificam:
 - tratamento da pendência de serviços sem ocultar erros HTTP 500;
 - propagação de `404` no detalhe e rejeição de horários de outro prestador.
 
-O `CatalogoFrontendContractIntegrationTest` compara nomes e tipos dos campos das fixtures com cinco das seis rotas de catálogo, via MockMvc e PostgreSQL: categorias gerais, prestadores, detalhe, horários e categorias do prestador. A rota de serviços ainda não foi incluída nessa comparação compartilhada; seu contrato e comportamento são validados separadamente pelo `CatalogoServicosIntegrationTest`. O Docker precisa estar disponível:
+O `CatalogoFrontendContractIntegrationTest` compara nomes e tipos dos campos das fixtures com cinco das seis consultas originais do catálogo, via MockMvc e PostgreSQL: categorias gerais, prestadores, detalhe, horários e categorias do prestador. Serviços e avaliações não fazem parte dessa comparação compartilhada; são validados separadamente por `CatalogoServicosIntegrationTest` e `CatalogoAvaliacoesIntegrationTest`. O Docker precisa estar disponível:
 
 ```powershell
 .\mvnw.cmd -pl core test '-Dtest=CatalogoFrontendContractIntegrationTest,CatalogoServicosIntegrationTest'
