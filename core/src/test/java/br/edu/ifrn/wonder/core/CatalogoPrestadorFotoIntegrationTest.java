@@ -33,6 +33,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultMatcher;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
@@ -96,7 +97,7 @@ class CatalogoPrestadorFotoIntegrationTest {
 
         mockMvc.perform(multipart(rota(id)).file(foto("image/png", PNG))
                         .with(jwt().jwt(token -> token.subject(dono.toString()))))
-                .andExpect(status().isOk())
+                .andExpect(sucesso())
                 .andExpect(jsonPath("$", aMapWithSize(13)))
                 .andExpect(jsonPath("$.id").value(id.intValue()))
                 .andExpect(jsonPath("$.fotoUrl").value(url(id)));
@@ -115,28 +116,28 @@ class CatalogoPrestadorFotoIntegrationTest {
         assertThat(salvo.getPerfilUsuario().getFotoUrl()).isEqualTo("foto-do-perfil");
 
         mockMvc.perform(get(rota(id)))
-                .andExpect(status().isOk())
+                .andExpect(sucesso())
                 .andExpect(content().bytes(PNG))
                 .andExpect(content().contentType("image/png"))
                 .andExpect(header().longValue("Content-Length", PNG.length))
                 .andExpect(header().string("X-Content-Type-Options", "nosniff"))
                 .andExpect(header().string("Cache-Control", "no-store"));
         mockMvc.perform(get("/catalogo/prestadores/{id}", id))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.fotoUrl").value(url(id)));
+                .andExpect(sucesso()).andExpect(jsonPath("$.fotoUrl").value(url(id)));
         mockMvc.perform(get("/catalogo/prestadores/me")
                         .with(jwt().jwt(token -> token.subject(dono.toString()))))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.fotoUrl").value(url(id)));
+                .andExpect(sucesso()).andExpect(jsonPath("$.fotoUrl").value(url(id)));
         mockMvc.perform(get("/catalogo/prestadores"))
-                .andExpect(status().isOk())
+                .andExpect(sucesso())
                 .andExpect(jsonPath("$[?(@.id == %s)].fotoUrl".formatted(id))
                         .value(org.hamcrest.Matchers.contains(url(id))));
 
         byte[] novaFoto = new byte[]{(byte) 0xff, (byte) 0xd8, (byte) 0xff, 1};
         mockMvc.perform(multipart(rota(id)).file(foto("image/jpeg", novaFoto))
                         .with(jwt().jwt(token -> token.subject(dono.toString()))))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.fotoUrl").value(url(id)));
+                .andExpect(sucesso()).andExpect(jsonPath("$.fotoUrl").value(url(id)));
         mockMvc.perform(get(rota(id)))
-                .andExpect(status().isOk()).andExpect(content().contentType("image/jpeg"))
+                .andExpect(sucesso()).andExpect(content().contentType("image/jpeg"))
                 .andExpect(content().bytes(novaFoto));
 
         MinioClient minio = MinioClient.builder().endpoint(endpointMinio())
@@ -159,7 +160,7 @@ class CatalogoPrestadorFotoIntegrationTest {
         Prestador prestador = criarPrestador(situacao);
         mockMvc.perform(multipart(rota(prestador.getId())).file(foto("image/png", PNG))
                         .with(jwt().jwt(token -> token.subject(prestador.getPerfilUsuario().getKeycloakId().toString()))))
-                .andExpect(status().isOk())
+                .andExpect(sucesso())
                 .andExpect(jsonPath("$.status").value(situacao.name().toLowerCase(java.util.Locale.ROOT)))
                 .andExpect(jsonPath("$.ativo").value(prestador.isAtivo()));
     }
@@ -172,7 +173,7 @@ class CatalogoPrestadorFotoIntegrationTest {
         UUID dono = prestador.getPerfilUsuario().getKeycloakId();
         mockMvc.perform(multipart(rota(id)).file(foto("image/png", PNG))
                         .with(jwt().jwt(token -> token.subject(dono.toString()))))
-                .andExpect(status().isOk());
+                .andExpect(sucesso());
         prestador.setStatus(situacao);
         prestador.setAtivo(false);
         prestadorRepository.flush();
@@ -181,10 +182,10 @@ class CatalogoPrestadorFotoIntegrationTest {
         mockMvc.perform(get(rota(id)).with(jwt().jwt(token -> token.subject(UUID.randomUUID().toString()))))
                 .andExpect(status().isNotFound());
         mockMvc.perform(get(rota(id)).with(jwt().jwt(token -> token.subject(dono.toString()))))
-                .andExpect(status().isOk()).andExpect(content().bytes(PNG));
+                .andExpect(sucesso()).andExpect(content().bytes(PNG));
         mockMvc.perform(get(rota(id)).with(jwt().jwt(token -> token.subject(UUID.randomUUID().toString()))
                         .authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
-                .andExpect(status().isOk()).andExpect(content().bytes(PNG));
+                .andExpect(sucesso()).andExpect(content().bytes(PNG));
         // Mesmo com ativo=true, apenas status ATIVO pode publicar a imagem.
         prestador.setAtivo(true);
         prestadorRepository.flush();
@@ -233,7 +234,7 @@ class CatalogoPrestadorFotoIntegrationTest {
         prestador.setFotoUrl("https://cdn.wonder.dev/foto-anterior.png");
         mockMvc.perform(get(rota(prestador.getId()))).andExpect(status().isNotFound());
         mockMvc.perform(get("/catalogo/prestadores/{id}", prestador.getId()))
-                .andExpect(status().isOk())
+                .andExpect(sucesso())
                 .andExpect(jsonPath("$.fotoUrl").value("https://cdn.wonder.dev/foto-anterior.png"));
     }
 
@@ -283,10 +284,21 @@ class CatalogoPrestadorFotoIntegrationTest {
         System.arraycopy(assinatura, 0, webp, 0, assinatura.length);
         mockMvc.perform(multipart(rota(prestador.getId())).file(foto("image/webp", webp))
                         .with(jwt().jwt(token -> token.subject(prestador.getPerfilUsuario().getKeycloakId().toString()))))
-                .andExpect(status().isOk());
+                .andExpect(sucesso());
         mockMvc.perform(get(rota(prestador.getId())))
-                .andExpect(status().isOk()).andExpect(content().contentType("image/webp"))
+                .andExpect(sucesso()).andExpect(content().contentType("image/webp"))
                 .andExpect(content().bytes(webp));
+    }
+
+    private ResultMatcher sucesso() {
+        return resultado -> {
+            if (resultado.getResolvedException() != null) {
+                throw new AssertionError("Falha no fluxo de foto do prestador: "
+                        + resultado.getRequest().getMethod() + " " + resultado.getRequest().getRequestURI(),
+                        resultado.getResolvedException());
+            }
+            status().isOk().match(resultado);
+        };
     }
 
     private Prestador criarPrestador(StatusPrestador situacao) {
