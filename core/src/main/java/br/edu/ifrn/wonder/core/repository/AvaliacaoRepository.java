@@ -9,6 +9,8 @@ import br.edu.ifrn.wonder.core.domain.Avaliacao;
 
 public interface AvaliacaoRepository extends JpaRepository<Avaliacao, Long> {
 
+    boolean existsByAgendamentoId(Long agendamentoId);
+
     @EntityGraph(attributePaths = {"agendamento", "agendamento.prestador"})
     List<Avaliacao> findByAgendamentoPrestadorIdOrderByIdAsc(Long prestadorId);
 }
