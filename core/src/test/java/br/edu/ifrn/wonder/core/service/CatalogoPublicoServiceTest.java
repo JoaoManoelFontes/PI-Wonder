@@ -19,6 +19,7 @@ import br.edu.ifrn.wonder.core.domain.StatusCategoria;
 import br.edu.ifrn.wonder.core.domain.Prestador;
 import br.edu.ifrn.wonder.core.domain.StatusPrestador;
 import br.edu.ifrn.wonder.core.domain.StatusServico;
+import br.edu.ifrn.wonder.core.repository.AvaliacaoRepository;
 import br.edu.ifrn.wonder.core.repository.CategoriaRepository;
 import br.edu.ifrn.wonder.core.repository.HorarioAtendimentoRepository;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
@@ -39,8 +40,21 @@ class CatalogoPublicoServiceTest {
     @Mock
     private HorarioAtendimentoRepository horarioAtendimentoRepository;
 
+    @Mock
+    private AvaliacaoRepository avaliacaoRepository;
+
     @InjectMocks
     private CatalogoPublicoService catalogoPublicoService;
+
+    @Test
+    void deveValidarPublicacaoDoPrestadorAntesDeConsultarAvaliacoes() {
+        when(prestadorRepository.findByIdAndAtivoTrueAndStatus(1L, StatusPrestador.ATIVO))
+                .thenReturn(Optional.empty());
+        assertThatThrownBy(() -> catalogoPublicoService.listarAvaliacoesDoPrestador(1L))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        erro -> assertThat(erro.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+        verifyNoInteractions(avaliacaoRepository);
+    }
 
     @Test
     void deveRetornar404QuandoCategoriaNaoEstaDisponivel() {

@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import br.edu.ifrn.wonder.core.dto.AvaliacaoPublicResponse;
 import br.edu.ifrn.wonder.core.dto.PrestadorPublicResponse;
 import br.edu.ifrn.wonder.core.dto.HorarioAtendimentoPublicResponse;
 import br.edu.ifrn.wonder.core.dto.CategoriaPublicResponse;
@@ -49,6 +50,14 @@ public class CatalogoPrestadorController {
         return catalogoPublicoService.listarServicosDoPrestador(prestadorId)
                 .stream()
                 .map(ServicoPublicResponse::from)
+                .toList();
+    }
+
+    @GetMapping("/{prestadorId}/avaliacoes")
+    List<AvaliacaoPublicResponse> listarAvaliacoes(@PathVariable("prestadorId") Long prestadorId) {
+        return catalogoPublicoService.listarAvaliacoesDoPrestador(prestadorId)
+                .stream()
+                .map(AvaliacaoPublicResponse::from)
                 .toList();
     }
 }
