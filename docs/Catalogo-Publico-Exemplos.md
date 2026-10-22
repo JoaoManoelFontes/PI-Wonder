@@ -625,6 +625,36 @@ Inativar um serviço o remove das consultas públicas de serviços ativos e da d
 
 `ServicoPrestadorIntegrationTest` cobre criação, edição parcial, inativação, estados do prestador, limites dos campos, categorias derivadas, isolamento entre usuários e preservação dos agendamentos. As consultas GET públicas existentes continuam funcionando sem login.
 
+## Foto do serviço
+
+`POST /catalogo/prestadores/{prestador_id}/servicos/{servico_id}/foto` recebe `multipart/form-data` com a parte obrigatória `file`. Exige JWT do dono do prestador e serviço pertencente a esse cadastro. Retorna `200` com os oito campos de `ServicoPublicResponse`, incluindo `foto_url` absoluto, montado com `wonder.api.public-url` (`APP_PUBLIC_URL`).
+
+Usa a mesma validação da [foto do prestador](#foto-do-prestador): JPEG, PNG ou WebP até 5 MB (5.242.880 bytes), com conferência do tipo MIME e assinatura inicial. O arquivo substitui o objeto `prestadores/{prestador_id}/servicos/{servico_id}/foto` no MinIO. A URL é persistida no serviço. As fotos do perfil, do estabelecimento e de outros serviços permanecem independentes.
+
+O upload mantém nome, preço, duração, categoria e status do serviço. Serviços inativos podem receber foto pelo dono, conforme a regra de edição existente, sem serem reativados. Prestador `PENDENTE` não pode alterar a imagem durante análise. Administradores não podem enviar foto em nome de outro dono nesta rota.
+
+```powershell
+$prestadorId = 1
+$servicoId = 1
+curl.exe -X POST "http://localhost:8080/catalogo/prestadores/$prestadorId/servicos/$servicoId/foto" `
+  -H "Authorization: Bearer $token" `
+  -F "file=@C:/imagens/servico.png;type=image/png"
+```
+
+| Situação do upload | Retorno |
+| --- | --- |
+| Dono, cadastro editável e arquivo válido | `200`, serviço com `foto_url` atualizado. |
+| Sem autenticação / outro usuário | `401` / `403`. |
+| Prestador ou serviço inexistente; serviço de outro prestador | `404`. |
+| Prestador pendente de análise | `409`. |
+| Parte `file` ausente, arquivo vazio ou formato/assinatura inválido | `400`. |
+| Mais de 5 MB / corpo sem multipart | `413` / `415`. |
+| Falha do armazenamento | `503`; URL anterior preservada. |
+
+`GET /catalogo/prestadores/{prestador_id}/servicos/{servico_id}/foto` entrega a imagem com `Content-Type`, `Content-Length`, `nosniff` e `Cache-Control: no-store`. É público somente para serviço `ATIVO` de prestador `ATIVO` e `ativo = true`. O dono e administradores podem consultar imagens não públicas; os demais recebem `404`. Serviço sem upload, vínculo incorreto ou cadastro inexistente também retorna `404`. URLs externas anteriores permanecem no DTO até a substituição; esta consulta não busca nem redireciona para essas URLs.
+
+`CatalogoServicoFotoIntegrationTest` valida o fluxo com PostgreSQL e MinIO reais via Testcontainers. `ServicoFotoServiceTest` confere falha de armazenamento e validações de dono, status e vínculo antes de acessar o MinIO. Falhas inesperadas nos testes HTTP exibem a exceção original para facilitar o diagnóstico do CI.
+
 ## Gestão de horários do próprio prestador — AUTH-LW-007
 
 As duas rotas exigem JWT do dono e seguem a regra de edição do cadastro: prestador pendente de análise não pode alterar os horários. Cadastros em rascunho, rejeitados, ativos ou suspensos podem ser alterados pelo dono. O papel de admin não permite modificar o horário de outro usuário por essas rotas.
