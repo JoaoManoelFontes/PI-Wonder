@@ -121,6 +121,14 @@ Em cada configuração:
 
 Inicie as três aplicações. O `core` ficará disponível em `http://localhost:8080`.
 
+Para permitir acesso do frontend, configure `CORS_ALLOWED_ORIGINS` no `.env.dev` (IntelliJ) ou `.env` (Docker Compose), separando as origins por vírgula:
+
+```dotenv
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+```
+
+Cada origin deve conter protocolo, host e porta (quando necessária), sem caminho ou barra final. A lista vale para toda a API, com todos os métodos e headers, incluindo `Authorization`. Endpoints protegidos continuam exigindo JWT. Sem a variável, nenhuma origin externa é liberada. Reinicie o `core` após alterar a lista; no Compose, recrie o serviço com `docker compose up -d --force-recreate core`.
+
 Para encerrar somente a infraestrutura:
 
 ```bash
