@@ -7,8 +7,26 @@
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": true,
   "editUsernameAllowed": false,
+  "defaultRole": {
+    "name": "default-roles-wonder",
+    "description": "${role_default-roles}",
+    "composite": true,
+    "clientRole": false
+  },
   "roles": {
     "realm": [
+      {
+        "name": "offline_access",
+        "description": "${role_offline-access}",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "uma_authorization",
+        "description": "${role_uma_authorization}",
+        "composite": false,
+        "clientRole": false
+      },
       {
         "name": "CUSTOMER",
         "description": "Cliente que agenda servicos de beleza"
@@ -20,18 +38,27 @@
       {
         "name": "ADMIN",
         "description": "Administrador da plataforma Wonder"
+      },
+      {
+        "name": "default-roles-wonder",
+        "description": "${role_default-roles}",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "offline_access",
+            "uma_authorization",
+            "CUSTOMER"
+          ],
+          "client": {
+            "account": [
+              "view-profile",
+              "manage-account"
+            ]
+          }
+        },
+        "clientRole": false
       }
     ]
-  },
-  "defaultRole": {
-    "name": "default-roles-wonder",
-    "description": "${role_default-roles}",
-    "composite": true,
-    "composites": {
-      "realm": [
-        "CUSTOMER"
-      ]
-    }
   },
   "clients": [
     {
@@ -44,16 +71,16 @@
       "directAccessGrantsEnabled": false,
       "implicitFlowEnabled": false,
       "redirectUris": [
-        "http://localhost:3000/*",
-        "http://localhost:5173/*"
+        "http://localhost:8082/*",
+        "wonder://auth"
       ],
       "webOrigins": [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://localhost:8080"
+        "http://localhost:8080",
+        "http://localhost:8082"
       ],
       "attributes": {
-        "pkce.code.challenge.method": "S256"
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
       }
     }
   ]
