@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import br.edu.ifrn.wonder.core.domain.Categoria;
+import br.edu.ifrn.wonder.core.dto.AtualizacaoCategoriaRequest;
 import br.edu.ifrn.wonder.core.dto.CadastroCategoriaRequest;
 import br.edu.ifrn.wonder.core.repository.CategoriaRepository;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,24 @@ public class CategoriaService {
                 .nome(nome)
                 .descricao(normalizarDescricao(request.descricao()))
                 .build();
+        try {
+            return categoriaRepository.saveAndFlush(categoria);
+        } catch (DataIntegrityViolationException exception) {
+            throw categoriaJaCadastrada(exception);
+        }
+    }
+
+    @Transactional
+    public Categoria atualizarCategoria(Long categoriaId, AtualizacaoCategoriaRequest request) {
+        Categoria categoria = categoriaRepository.findById(categoriaId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Categoria não encontrada"));
+        String nome = request.nome().trim();
+        if (categoriaRepository.existsByNomeIgnoreCaseAndIdNot(nome, categoriaId)) {
+            throw categoriaJaCadastrada();
+        }
+
+        categoria.setNome(nome);
+        categoria.setDescricao(normalizarDescricao(request.descricao()));
         try {
             return categoriaRepository.saveAndFlush(categoria);
         } catch (DataIntegrityViolationException exception) {

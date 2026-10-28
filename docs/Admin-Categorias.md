@@ -53,8 +53,30 @@ Invoke-RestMethod -Method Post -Uri 'http://localhost:8080/admin/categorias' `
 
 Nome ausente, vazio ou maior que 100 caracteres retorna `400`. Nome já cadastrado retorna `409`, sem diferenciar letras maiúsculas de minúsculas. Sem autenticação, retorna `401`; usuário sem a role `ADMIN` recebe `403`.
 
+## Edição
+
+`PUT /admin/categorias/{categoria_id}` exige role `ADMIN` e recebe o mesmo formato do cadastro:
+
+```json
+{
+  "nome": "Maquiagem profissional",
+  "descricao": "Produção para eventos"
+}
+```
+
+Retorna `200` com a categoria atualizada. A operação preserva o identificador, o status e a foto. Espaços nas extremidades são removidos e uma descrição vazia ou `null` limpa o campo.
+
+```powershell
+$corpo = @{ nome = 'Maquiagem profissional'; descricao = 'Produção para eventos' } | ConvertTo-Json
+Invoke-RestMethod -Method Put -Uri 'http://localhost:8080/admin/categorias/10' `
+  -Headers @{ Authorization = "Bearer $token" } `
+  -ContentType 'application/json' -Body $corpo
+```
+
+Categoria inexistente retorna `404`. Nome inválido retorna `400`; nome pertencente a outra categoria retorna `409`, sem diferenciar maiúsculas de minúsculas. Manter o próprio nome, mesmo mudando sua capitalização, é permitido.
+
 ## Validação
 
-`AdminCategoriasIntegrationTest` usa MockMvc e PostgreSQL real via Testcontainers para validar autorização, contrato, ordenação, inclusão de categorias inativas, lista vazia, cadastro, normalização, duplicidade, persistência e continuidade do filtro público.
+`AdminCategoriasIntegrationTest` usa MockMvc e PostgreSQL real via Testcontainers para validar autorização, contrato, ordenação, inclusão de categorias inativas, lista vazia, cadastro, edição, normalização, duplicidade, persistência e continuidade do filtro público.
 
-Esta entrega não altera migrations nem seeds. Edição, ativação/inativação e upload de foto serão implementados em tasks separadas.
+Esta entrega não altera migrations nem seeds. Ativação/inativação e upload de foto serão implementados em tasks separadas.
