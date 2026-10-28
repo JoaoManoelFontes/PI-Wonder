@@ -70,6 +70,8 @@ class CatalogoServicoFotoIntegrationTest {
     static final GenericContainer<?> MINIO = new GenericContainer<>(DockerImageName.parse("bitnamilegacy/minio:2025.7.23"))
             .withEnv("MINIO_ROOT_USER", "wonder")
             .withEnv("MINIO_ROOT_PASSWORD", "wonder-secret")
+            // Evita que o health check encontre o servidor temporário do setup, que é reiniciado.
+            .withEnv("MINIO_SKIP_CLIENT", "yes")
             .withExposedPorts(9000)
             .waitingFor(Wait.forHttp("/minio/health/ready").forPort(9000));
 

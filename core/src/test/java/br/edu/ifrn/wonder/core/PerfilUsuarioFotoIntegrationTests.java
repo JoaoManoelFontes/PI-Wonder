@@ -49,6 +49,8 @@ class PerfilUsuarioFotoIntegrationTests {
     )
             .withEnv("MINIO_ROOT_USER", MINIO_USUARIO)
             .withEnv("MINIO_ROOT_PASSWORD", MINIO_SENHA)
+            // Evita que o health check encontre o servidor temporário do setup, que é reiniciado.
+            .withEnv("MINIO_SKIP_CLIENT", "yes")
             .withExposedPorts(9000)
             .waitingFor(Wait.forHttp("/minio/health/ready").forPort(9000));
 
