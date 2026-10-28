@@ -192,7 +192,7 @@ Os testes de integração utilizam Testcontainers e, portanto, podem exigir que 
 
 Exemplos da API atual: [catálogo](docs/Catalogo-Publico-Exemplos.md), com consultas públicas, operações autenticadas do prestador, upload de foto e comandos de validação.
 
-Administração de categorias: [listagem protegida por role ADMIN](docs/Admin-Categorias.md), incluindo categorias ativas e inativas, contrato e erros de autorização.
+Administração de categorias: [consulta e cadastro protegidos por role ADMIN](docs/Admin-Categorias.md), incluindo categorias ativas e inativas, validação, duplicidade e erros de autorização.
 
 Disponibilidade: [exemplos das consultas de dias e horários livres](docs/Disponibilidade-Exemplos.md), com acesso sem login, parâmetros, respostas do seed, conflitos, listas vazias e critérios de validação (LW-015 e JN-015).
 

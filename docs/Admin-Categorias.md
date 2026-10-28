@@ -31,8 +31,30 @@ Sem autenticação, retorna `401`. Usuário autenticado sem a role `ADMIN` receb
 
 A consulta é somente leitura e não altera categorias ou serviços. O `GET /catalogo/categorias` continua público e retorna apenas categorias ativas. A rota antiga `/catalogo/admin/categorias` não é adicionada.
 
+## Cadastro
+
+`POST /admin/categorias` exige a mesma role `ADMIN`. O corpo recebe `nome` obrigatório e `descricao` opcional:
+
+```json
+{
+  "nome": "Maquiagem",
+  "descricao": "Serviços de maquiagem"
+}
+```
+
+A resposta `201` usa o mesmo contrato da listagem. A categoria nasce com `status` igual a `ativa` e `foto_url` igual a `null`. Espaços nas extremidades são removidos; descrição vazia é armazenada como `null`.
+
+```powershell
+$corpo = @{ nome = 'Maquiagem'; descricao = 'Serviços de maquiagem' } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri 'http://localhost:8080/admin/categorias' `
+  -Headers @{ Authorization = "Bearer $token" } `
+  -ContentType 'application/json' -Body $corpo
+```
+
+Nome ausente, vazio ou maior que 100 caracteres retorna `400`. Nome já cadastrado retorna `409`, sem diferenciar letras maiúsculas de minúsculas. Sem autenticação, retorna `401`; usuário sem a role `ADMIN` recebe `403`.
+
 ## Validação
 
-`AdminCategoriasIntegrationTest` usa MockMvc e PostgreSQL real via Testcontainers para validar autorização, contrato, ordenação, inclusão de categorias inativas, lista vazia, preservação dos registros e continuidade do filtro público.
+`AdminCategoriasIntegrationTest` usa MockMvc e PostgreSQL real via Testcontainers para validar autorização, contrato, ordenação, inclusão de categorias inativas, lista vazia, cadastro, normalização, duplicidade, persistência e continuidade do filtro público.
 
-Esta entrega não altera migrations nem seeds. Cadastro, edição, ativação/inativação e upload de foto serão implementados em tasks separadas.
+Esta entrega não altera migrations nem seeds. Edição, ativação/inativação e upload de foto serão implementados em tasks separadas.
