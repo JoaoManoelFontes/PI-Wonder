@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.aMapWithSize;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -100,6 +101,87 @@ class AdminCategoriasIntegrationTest {
                         new SimpleGrantedAuthority("ROLE_PROVIDER"),
                         new SimpleGrantedAuthority("ROLE_ADMIN"))))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void administradorDeveCadastrarCategoriaAtivaComContratoExistente() throws Exception {
+        removerCategoriasDeTeste();
+
+        mockMvc.perform(post("/admin/categorias")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "nome": "  Maquiagem  ",
+                                  "descricao": "  Serviços de maquiagem  "
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$", aMapWithSize(5)))
+                .andExpect(jsonPath("$.id").isNumber())
+                .andExpect(jsonPath("$.nome").value("Maquiagem"))
+                .andExpect(jsonPath("$.descricao").value("Serviços de maquiagem"))
+                .andExpect(jsonPath("$.status").value("ativa"))
+                .andExpect(jsonPath("$.foto_url").isEmpty());
+
+        Categoria categoria = categoriaRepository.findAll().getFirst();
+        assertThat(categoria.getNome()).isEqualTo("Maquiagem");
+        assertThat(categoria.getDescricao()).isEqualTo("Serviços de maquiagem");
+        assertThat(categoria.getStatus()).isEqualTo(StatusCategoria.ATIVA);
+        assertThat(categoria.getFotoUrl()).isNull();
+        assertThat(categoria.getCriadoEm()).isNotNull();
+        assertThat(categoria.getAtualizadoEm()).isNotNull();
+    }
+
+    @Test
+    void deveRecusarNomeDuplicadoSemDiferenciarMaiusculasEMinusculas() throws Exception {
+        removerCategoriasDeTeste();
+        Categoria existente = categoriaRepository.saveAndFlush(Categoria.builder()
+                .nome("Maquiagem").descricao("Descrição original").status(StatusCategoria.INATIVA).build());
+
+        mockMvc.perform(post("/admin/categorias")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nome":"maquiagem","descricao":"Outra descrição"}
+                                """))
+                .andExpect(status().isConflict());
+
+        assertThat(categoriaRepository.findAll()).singleElement().satisfies(categoria -> {
+            assertThat(categoria.getId()).isEqualTo(existente.getId());
+            assertThat(categoria.getDescricao()).isEqualTo("Descrição original");
+            assertThat(categoria.getStatus()).isEqualTo(StatusCategoria.INATIVA);
+        });
+    }
+
+    @Test
+    void deveValidarNomeObrigatorioENoMaximoCemCaracteres() throws Exception {
+        removerCategoriasDeTeste();
+        String nomeLongo = "x".repeat(101);
+
+        for (String corpo : List.of("{}", "{\"nome\":null}", "{\"nome\":\"   \"}",
+                "{\"nome\":\"%s\"}".formatted(nomeLongo))) {
+            mockMvc.perform(post("/admin/categorias")
+                            .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(corpo))
+                    .andExpect(status().isBadRequest());
+        }
+
+        assertThat(categoriaRepository.count()).isZero();
+    }
+
+    @Test
+    void deveProtegerCadastroDeCategoria() throws Exception {
+        String corpo = "{\"nome\":\"Maquiagem\"}";
+
+        mockMvc.perform(post("/admin/categorias").contentType(MediaType.APPLICATION_JSON).content(corpo))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/admin/categorias")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_PROVIDER")))
+                        .contentType(MediaType.APPLICATION_JSON).content(corpo))
+                .andExpect(status().isForbidden());
     }
 
     private void removerCategoriasDeTeste() {
