@@ -17,6 +17,8 @@ public interface CategoriaRepository extends JpaRepository<Categoria, Long> {
 
     boolean existsByNomeIgnoreCase(String nome);
 
+    boolean existsByNomeIgnoreCaseAndIdNot(String nome, Long id);
+
     List<Categoria> findByStatusOrderByNomeAsc(StatusCategoria status);
 
     Optional<Categoria> findByIdAndStatus(Long id, StatusCategoria status);
