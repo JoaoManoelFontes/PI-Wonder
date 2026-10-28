@@ -13,6 +13,8 @@ import br.edu.ifrn.wonder.core.domain.StatusServico;
 
 public interface CategoriaRepository extends JpaRepository<Categoria, Long> {
 
+    List<Categoria> findAllByOrderByNomeAsc();
+
     List<Categoria> findByStatusOrderByNomeAsc(StatusCategoria status);
 
     Optional<Categoria> findByIdAndStatus(Long id, StatusCategoria status);
