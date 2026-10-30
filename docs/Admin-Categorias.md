@@ -75,8 +75,29 @@ Invoke-RestMethod -Method Put -Uri 'http://localhost:8080/admin/categorias/10' `
 
 Categoria inexistente retorna `404`. Nome inválido retorna `400`; nome pertencente a outra categoria retorna `409`, sem diferenciar maiúsculas de minúsculas. Manter o próprio nome, mesmo mudando sua capitalização, é permitido.
 
+## Alteração de status
+
+`PATCH /admin/categorias/{categoria_id}/status` exige role `ADMIN` e ativa ou inativa uma categoria:
+
+```json
+{
+  "status": "inativa"
+}
+```
+
+Os valores aceitos são `ativa` e `inativa`. A resposta `200` usa o mesmo contrato da listagem e preserva nome, descrição e foto. Repetir o status atual é permitido.
+
+```powershell
+$corpo = @{ status = 'inativa' } | ConvertTo-Json
+Invoke-RestMethod -Method Patch -Uri 'http://localhost:8080/admin/categorias/10/status' `
+  -Headers @{ Authorization = "Bearer $token" } `
+  -ContentType 'application/json' -Body $corpo
+```
+
+Categoria inexistente retorna `404`; status ausente, vazio ou diferente dos valores aceitos retorna `400`. Uma categoria inativa continua disponível na listagem administrativa, mas deixa de aparecer em `GET /catalogo/categorias`.
+
 ## Validação
 
-`AdminCategoriasIntegrationTest` usa MockMvc e PostgreSQL real via Testcontainers para validar autorização, contrato, ordenação, inclusão de categorias inativas, lista vazia, cadastro, edição, normalização, duplicidade, persistência e continuidade do filtro público.
+`AdminCategoriasIntegrationTest` usa MockMvc e PostgreSQL real via Testcontainers para validar autorização, contrato, ordenação, inclusão de categorias inativas, lista vazia, cadastro, edição, alteração de status, normalização, duplicidade, persistência e continuidade do filtro público.
 
-Esta entrega não altera migrations nem seeds. Ativação/inativação e upload de foto serão implementados em tasks separadas.
+Esta entrega não altera migrations nem seeds. O upload de foto será implementado em uma task separada.
