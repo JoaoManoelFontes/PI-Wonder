@@ -9,7 +9,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import br.edu.ifrn.wonder.core.domain.Categoria;
+import br.edu.ifrn.wonder.core.domain.StatusCategoria;
 import br.edu.ifrn.wonder.core.dto.AtualizacaoCategoriaRequest;
+import br.edu.ifrn.wonder.core.dto.AtualizacaoStatusCategoriaRequest;
 import br.edu.ifrn.wonder.core.dto.CadastroCategoriaRequest;
 import br.edu.ifrn.wonder.core.repository.CategoriaRepository;
 import lombok.RequiredArgsConstructor;
@@ -59,6 +61,22 @@ public class CategoriaService {
         } catch (DataIntegrityViolationException exception) {
             throw categoriaJaCadastrada(exception);
         }
+    }
+
+    @Transactional
+    public Categoria atualizarStatus(Long categoriaId, AtualizacaoStatusCategoriaRequest request) {
+        Categoria categoria = categoriaRepository.findById(categoriaId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Categoria não encontrada"));
+        categoria.setStatus(converterStatus(request.status()));
+        return categoriaRepository.saveAndFlush(categoria);
+    }
+
+    private StatusCategoria converterStatus(String status) {
+        return switch (status.trim()) {
+            case "ativa" -> StatusCategoria.ATIVA;
+            case "inativa" -> StatusCategoria.INATIVA;
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status de categoria inválido");
+        };
     }
 
     private String normalizarDescricao(String descricao) {

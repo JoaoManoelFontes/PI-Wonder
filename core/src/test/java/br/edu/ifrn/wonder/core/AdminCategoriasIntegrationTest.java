@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.aMapWithSize;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -296,6 +297,86 @@ class AdminCategoriasIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON).content(corpo))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(put("/admin/categorias/{categoriaId}", 1L)
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_PROVIDER")))
+                        .contentType(MediaType.APPLICATION_JSON).content(corpo))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void administradorDeveInativarEReativarCategoriaPreservandoOsDemaisDados() throws Exception {
+        removerCategoriasDeTeste();
+        Categoria categoria = categoriaRepository.saveAndFlush(Categoria.builder()
+                .nome("Maquiagem").descricao("Produção para eventos")
+                .fotoUrl("https://imagens.exemplo/maquiagem.png").build());
+
+        mockMvc.perform(patch("/admin/categorias/{categoriaId}/status", categoria.getId())
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"inativa\"}"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$", aMapWithSize(5)))
+                .andExpect(jsonPath("$.id").value(categoria.getId().intValue()))
+                .andExpect(jsonPath("$.nome").value("Maquiagem"))
+                .andExpect(jsonPath("$.descricao").value("Produção para eventos"))
+                .andExpect(jsonPath("$.status").value("inativa"))
+                .andExpect(jsonPath("$.foto_url").value("https://imagens.exemplo/maquiagem.png"));
+
+        mockMvc.perform(get("/catalogo/categorias"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == %s)]".formatted(categoria.getId())).isEmpty());
+
+        mockMvc.perform(patch("/admin/categorias/{categoriaId}/status", categoria.getId())
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"ativa\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ativa"));
+
+        Categoria reativada = categoriaRepository.findById(categoria.getId()).orElseThrow();
+        assertThat(reativada.getStatus()).isEqualTo(StatusCategoria.ATIVA);
+        assertThat(reativada.getNome()).isEqualTo("Maquiagem");
+        assertThat(reativada.getDescricao()).isEqualTo("Produção para eventos");
+        assertThat(reativada.getFotoUrl()).isEqualTo("https://imagens.exemplo/maquiagem.png");
+    }
+
+    @Test
+    void deveRecusarStatusAusenteVazioOuInvalidoSemAlterarCategoria() throws Exception {
+        removerCategoriasDeTeste();
+        Categoria categoria = categoriaRepository.saveAndFlush(Categoria.builder().nome("Maquiagem").build());
+
+        for (String corpo : List.of("{}", "{\"status\":null}", "{\"status\":\"   \"}",
+                "{\"status\":\"arquivada\"}", "{\"status\":\"ATIVA\"}")) {
+            mockMvc.perform(patch("/admin/categorias/{categoriaId}/status", categoria.getId())
+                            .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(corpo))
+                    .andExpect(status().isBadRequest());
+        }
+
+        assertThat(categoriaRepository.findById(categoria.getId()).orElseThrow().getStatus())
+                .isEqualTo(StatusCategoria.ATIVA);
+    }
+
+    @Test
+    void deveRetornarNaoEncontradoAoAlterarStatusDeCategoriaInexistente() throws Exception {
+        removerCategoriasDeTeste();
+
+        mockMvc.perform(patch("/admin/categorias/{categoriaId}/status", 999999L)
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"inativa\"}"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void deveProtegerAlteracaoDeStatusDaCategoria() throws Exception {
+        String corpo = "{\"status\":\"inativa\"}";
+
+        mockMvc.perform(patch("/admin/categorias/{categoriaId}/status", 1L)
+                        .contentType(MediaType.APPLICATION_JSON).content(corpo))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(patch("/admin/categorias/{categoriaId}/status", 1L)
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_PROVIDER")))
                         .contentType(MediaType.APPLICATION_JSON).content(corpo))
                 .andExpect(status().isForbidden());
