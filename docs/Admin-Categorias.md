@@ -96,8 +96,24 @@ Invoke-RestMethod -Method Patch -Uri 'http://localhost:8080/admin/categorias/10/
 
 Categoria inexistente retorna `404`; status ausente, vazio ou diferente dos valores aceitos retorna `400`. Uma categoria inativa continua disponível na listagem administrativa, mas deixa de aparecer em `GET /catalogo/categorias`.
 
+## Foto
+
+`POST /admin/categorias/{categoria_id}/foto` exige role `ADMIN` e recebe `multipart/form-data` com a parte obrigatória `file`. JPEG, PNG e WebP são aceitos até o limite de 5 MB, com validação do tipo MIME e da assinatura do arquivo.
+
+```powershell
+curl.exe -X POST "http://localhost:8080/admin/categorias/10/foto" `
+  -H "Authorization: Bearer $token" `
+  -F "file=@C:\imagens\categoria.png;type=image/png"
+```
+
+A resposta `200` usa o contrato completo da categoria. Nome, descrição e status são preservados. A imagem substitui o objeto `categorias/{categoria_id}/foto` no MinIO, sem acumular arquivos, e `foto_url` passa a apontar para `GET /catalogo/categorias/{categoria_id}/foto`. Essa consulta pública entrega os bytes com o tipo original, `Cache-Control: no-store` e `X-Content-Type-Options: nosniff`.
+
+Enquanto o aplicativo ainda não migrar seu caminho, `POST /catalogo/admin/categorias/{categoria_id}/foto` oferece o mesmo comportamento e a mesma proteção. A rota temporária não deve ser usada por novos clientes.
+
+Categoria inexistente retorna `404`. Arquivo ausente, vazio, de tipo incompatível ou com assinatura inválida retorna `400`; arquivo acima de 5 MB retorna `413`. Falha no MinIO retorna `503` sem substituir a URL armazenada no banco.
+
 ## Validação
 
-`AdminCategoriasIntegrationTest` usa MockMvc e PostgreSQL real via Testcontainers para validar autorização, contrato, ordenação, inclusão de categorias inativas, lista vazia, cadastro, edição, alteração de status, normalização, duplicidade, persistência e continuidade do filtro público.
+`AdminCategoriasIntegrationTest` usa MockMvc e PostgreSQL real via Testcontainers para validar autorização, contrato, ordenação, inclusão de categorias inativas, lista vazia, cadastro, edição, alteração de status, normalização, duplicidade, persistência e continuidade do filtro público. `AdminCategoriaFotoIntegrationTest` acrescenta MinIO real para cobrir as duas rotas de upload, substituição, leitura, formatos, limites e exposição no catálogo.
 
-Esta entrega não altera migrations nem seeds. O upload de foto será implementado em uma task separada.
+Esta entrega não altera migrations nem seeds.
