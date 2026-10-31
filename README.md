@@ -89,18 +89,55 @@ Neste modo, PostgreSQL, RabbitMQ e MinIO executam pelo Docker, enquanto `core`, 
 Crie o arquivo local a partir do exemplo:
 
 ```bash
-cp .env.example .env.dev
+cp .env.dev.example .env.dev
 ```
 
-Se atente aos hosts. Rodando local, troque os valores das váriaveis `POSTGRES_HOST` e `RABBITMQ_HOST` para `localhost`
+O exemplo de desenvolvimento já configura os hosts para `localhost`, incluindo o endpoint do MinIO.
 
 ### 6.2. Subir a infraestrutura
 
-Use o `compose.dev.yaml` com o `.env.dev` para iniciar apenas PostgreSQL e RabbitMQ:
+Use o `compose.dev.yaml` com o `.env.dev` para iniciar PostgreSQL, RabbitMQ, MinIO e Keycloak:
+
+Antes da primeira inicialização, preencha `KEYCLOAK_CLIENT_SECRET` conforme a seção 6.2.1.
 
 ```bash
 docker compose -f compose.dev.yaml --env-file .env.dev up -d
 ```
+
+O argumento `--env-file .env.dev` é necessário para resolver as referências `${...}` do Compose, como `MINIO_ACCESS_KEY` e `MINIO_SECRET_KEY`. O `env_file` declarado nos serviços injeta variáveis nos contêineres, mas não fornece os valores para essa interpolação. Sem o argumento, o Compose usa o `.env` por padrão, o que pode causar avisos de variáveis ausentes e valores vazios.
+
+### 6.2.1. Configurar o client administrativo do Keycloak
+
+O realm em `infra/keycloak/wonder-realm.json` inclui o client confidencial `wonder-core`, com service account e permissões `view-realm` e `manage-users` do client `realm-management`. O login do frontend continua usando `wonder-web`.
+
+Antes da primeira importação, gere um secret local, por exemplo no PowerShell:
+
+```powershell
+[Guid]::NewGuid().ToString('N') + [Guid]::NewGuid().ToString('N')
+```
+
+Copie o resultado para `KEYCLOAK_CLIENT_SECRET` no `.env.dev`, sem versionar esse arquivo. O Compose injeta essa variável no Keycloak, que substitui `${KEYCLOAK_CLIENT_SECRET}` durante a importação. Carregue o mesmo `.env.dev` na execução do `core`.
+
+Variáveis da integração administrativa:
+
+| Variável | Desenvolvimento | Finalidade |
+|---|---|---|
+| `KEYCLOAK_SERVER_URL` | `http://localhost:8081` | URL base da Admin API, sem `/realms/wonder` |
+| `KEYCLOAK_REALM` | `wonder` | Realm administrado |
+| `KEYCLOAK_CLIENT_ID` | `wonder-core` | Client com service account |
+| `KEYCLOAK_CLIENT_SECRET` | Gerado localmente | Secret compartilhado entre Keycloak e core |
+| `KEYCLOAK_CONNECT_TIMEOUT` | `3s` | Limite para estabelecer conexão |
+| `KEYCLOAK_READ_TIMEOUT` | `5s` | Limite de espera pela resposta |
+
+O `--import-realm` não atualiza realms existentes. Se o realm `wonder` já estiver criado, configure pelo Admin Console em `http://localhost:8081`: crie o client OpenID Connect `wonder-core`, habilite **Client authentication** e **Service accounts roles**, desabilite os fluxos de login e defina o secret gerado pelo Keycloak no `.env.dev`. Em **Service accounts roles**, atribua `view-realm` e `manage-users` de `realm-management`. Com **Full scope allowed** desabilitado, adicione essas mesmas roles aos scope mappings do client e mantenha o client scope `roles`. Reinicie o `core` após atualizar o secret. Não é necessário apagar volumes ou usuários.
+
+O `KeycloakAdminService.adicionarRoleProvider(UUID usuarioId)` obtém um token via `client_credentials`, consulta a realm role `PROVIDER` e a adiciona ao usuário, preservando as demais roles. Repetir a atribuição é seguro. Falhas de comunicação, credenciais ou resposta da integração são traduzidas em HTTP `503`. O token é obtido a cada operação; não há cache nem retentativas automáticas.
+
+O endpoint `POST /admin/prestadores/solicitacoes/{id}/aprovar` exige `ADMIN`. O `PrestadorService.aprovarSolicitacao` busca o cadastro com bloqueio, valida o status `PENDENTE`, atribui `PROVIDER` ao usuário vinculado ao prestador no Keycloak e só então ativa o cadastro e registra o administrador e a data da aprovação. A role `CUSTOMER` é preservada. Solicitações inexistentes retornam `404`; solicitações fora de `PENDENTE`, incluindo uma aprovação repetida, retornam `409` antes de acessar o Keycloak. Falhas na integração retornam `503` e revertem a transação local, mantendo a solicitação pendente. Consultar e reprovar solicitações não atribui roles.
+
+A transação do PostgreSQL não inclui o Keycloak. Se a role for atribuída, mas sua resposta se perder ou o commit local falhar, o usuário poderá ter `PROVIDER` com o cadastro ainda pendente. Nesse caso, repita a aprovação: atribuir uma role já existente é seguro e permite concluir o cadastro. Não há remoção automática da role nem transação distribuída. O frontend deve renovar o access token para receber `PROVIDER` após a aprovação; o JWT já emitido não é alterado.
+
+O `compose.yaml` completo ainda não inclui Keycloak: nesse modo, disponibilize-o na rede do `core` e ajuste `KEYCLOAK_SERVER_URL` e `KEYCLOAK_ISSUER_URI` para o servidor utilizado.
 
 ### 6.3. Criar as configurações de execução
 
@@ -187,6 +224,16 @@ Para testar somente um módulo e também construir suas dependências:
 ```
 
 Os testes de integração utilizam Testcontainers e, portanto, podem exigir que o Docker esteja em execução.
+
+Para validar somente a atribuição de role no Keycloak:
+
+```bash
+./mvnw -pl core -Dtest=KeycloakClientTest,KeycloakAdminServiceTest,KeycloakAdminIntegrationTest,PrestadorServiceTest,AdminPrestadorIntegrationTest test
+```
+
+O teste de integração inicia um Keycloak 26.0 temporário com o mesmo realm de `infra/keycloak`, um secret gerado durante o teste e sem dependência do ambiente local. Verifica a atribuição de `PROVIDER`, preservação de `CUSTOMER`, repetição e erros para usuário inexistente e credencial inválida. Os testes unitários cobrem o contrato HTTP, respostas inválidas e interrupção do fluxo em caso de falha.
+
+O `AdminPrestadorIntegrationTest` também utiliza PostgreSQL e RabbitMQ temporários e exercita a rota HTTP com os services e o client reais, verificando os dados após a transação da requisição. Cobre aprovação, preservação de roles, autorização, estados inválidos, falha do Keycloak sem aprovação local e nova tentativa após simular a perda da resposta de uma atribuição já realizada.
 
 ## 9. Documentação
 

@@ -2,6 +2,7 @@ package br.edu.ifrn.wonder.core;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItem;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -20,6 +21,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +38,7 @@ import br.edu.ifrn.wonder.core.repository.HorarioAtendimentoRepository;
 import br.edu.ifrn.wonder.core.repository.PerfilUsuarioRepository;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
 import br.edu.ifrn.wonder.core.repository.ServicoRepository;
+import br.edu.ifrn.wonder.core.service.KeycloakAdminService;
 
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
@@ -55,6 +58,8 @@ class AdminPrestadorStatusIntegrationTest {
     private ServicoRepository servicoRepository;
     @Autowired
     private HorarioAtendimentoRepository horarioAtendimentoRepository;
+    @MockitoBean
+    private KeycloakAdminService keycloakAdminService;
 
     @Test
     void deveListarPendentesEDetalharCadastroComServicosEHorarios() throws Exception {
@@ -98,6 +103,7 @@ class AdminPrestadorStatusIntegrationTest {
         assertThat(prestador.isAtivo()).isTrue();
         assertThat(prestador.getAprovadoEm()).isNotNull();
         assertThat(prestador.getMotivoRejeicao()).isNull();
+        verify(keycloakAdminService).adicionarRoleProvider(prestador.getPerfilUsuario().getKeycloakId());
     }
 
     @Test
@@ -154,6 +160,7 @@ class AdminPrestadorStatusIntegrationTest {
 
         assertThat(prestador.getAprovadoEm()).isEqualTo(aprovadoEm);
         assertThat(prestador.getAprovadoPor()).isEqualTo(aprovadoPor);
+        verify(keycloakAdminService).adicionarRoleProvider(prestador.getPerfilUsuario().getKeycloakId());
     }
 
     @Test

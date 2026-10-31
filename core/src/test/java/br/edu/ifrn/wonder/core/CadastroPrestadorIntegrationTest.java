@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.aMapWithSize;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -45,16 +46,13 @@ class CadastroPrestadorIntegrationTest {
         UUID keycloakId = UUID.randomUUID();
         PerfilUsuario outroPerfil = perfilUsuarioRepository.save(new PerfilUsuario(UUID.randomUUID()));
 
-        mockMvc.perform(post("/catalogo/prestadores")
+        mockMvc.perform(multipart("/catalogo/prestadores")
                         .with(jwt().jwt(token -> token.subject(keycloakId.toString())))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"nomeEstab":"Studio cadastro","documento":"12345678900",
-                                 "endereco":"Rua das Flores","numero":"10","bairro":"Centro",
-                                 "cidade":"Natal","estado":"RN","complemento":"Sala 1",
-                                 "fotoUrl":null,"status":"ATIVO","ativo":true,
-                                 "perfilUsuarioId":"%s"}
-                                """.formatted(outroPerfil.getId())))
+                        .param("nomeEstab", "Studio cadastro").param("documento", "12345678900")
+                        .param("endereco", "Rua das Flores").param("numero", "10").param("bairro", "Centro")
+                        .param("cidade", "Natal").param("estado", "RN").param("complemento", "Sala 1")
+                        .param("fotoUrl", "https://externa.test/foto.png").param("status", "ATIVO")
+                        .param("ativo", "true").param("perfilUsuarioId", outroPerfil.getId().toString()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$", aMapWithSize(13)))
                 .andExpect(jsonPath("$.id").isNumber())
@@ -90,18 +88,17 @@ class CadastroPrestadorIntegrationTest {
 
     @Test
     void deveExigirAutenticacaoNoCadastroDoCatalogo() throws Exception {
-        mockMvc.perform(post("/catalogo/prestadores").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"nomeEstab\":\"Studio cadastro\"}"))
+        mockMvc.perform(multipart("/catalogo/prestadores").param("nomeEstab", "Studio cadastro"))
                 .andExpect(status().isUnauthorized());
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"{}", "{\"nomeEstab\":\"   \"}"})
-    void deveValidarCadastroAntesDeCriarPerfil(String corpo) throws Exception {
+    @ValueSource(strings = {"", "   "})
+    void deveValidarCadastroAntesDeCriarPerfil(String nomeEstab) throws Exception {
         UUID keycloakId = UUID.randomUUID();
-        mockMvc.perform(post("/catalogo/prestadores")
+        mockMvc.perform(multipart("/catalogo/prestadores")
                         .with(jwt().jwt(token -> token.subject(keycloakId.toString())))
-                        .contentType(MediaType.APPLICATION_JSON).content(corpo))
+                        .param("nomeEstab", nomeEstab))
                 .andExpect(status().isBadRequest());
         assertThat(perfilUsuarioRepository.findByKeycloakId(keycloakId)).isEmpty();
     }
@@ -110,13 +107,13 @@ class CadastroPrestadorIntegrationTest {
     void deveRetornar409ParaSegundoCadastroDoMesmoUsuario() throws Exception {
         UUID keycloakId = UUID.randomUUID();
         long quantidadeAntes = prestadorRepository.count();
-        mockMvc.perform(post("/catalogo/prestadores")
+        mockMvc.perform(multipart("/catalogo/prestadores")
                         .with(jwt().jwt(token -> token.subject(keycloakId.toString())))
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"nomeEstab\":\"Studio cadastro\"}"))
+                        .param("nomeEstab", "Studio cadastro"))
                 .andExpect(status().isCreated());
-        mockMvc.perform(post("/catalogo/prestadores")
+        mockMvc.perform(multipart("/catalogo/prestadores")
                         .with(jwt().jwt(token -> token.subject(keycloakId.toString())))
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"nomeEstab\":\"Segundo cadastro\"}"))
+                        .param("nomeEstab", "Segundo cadastro"))
                 .andExpect(status().isConflict());
         assertThat(prestadorRepository.count()).isEqualTo(quantidadeAntes + 1);
     }

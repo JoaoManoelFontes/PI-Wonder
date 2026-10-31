@@ -62,6 +62,22 @@
   },
   "clients": [
     {
+      "clientId": "wonder-core",
+      "name": "Wonder Core",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KEYCLOAK_CLIENT_SECRET}",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["roles"],
+      "optionalClientScopes": []
+    },
+    {
       "clientId": "wonder-web",
       "name": "Wonder Web",
       "enabled": true,
@@ -81,6 +97,24 @@
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "+"
+      }
+    }
+  ],
+  "clientScopeMappings": {
+    "realm-management": [
+      {
+        "client": "wonder-core",
+        "roles": ["view-realm", "manage-users"]
+      }
+    ]
+  },
+  "users": [
+    {
+      "username": "service-account-wonder-core",
+      "enabled": true,
+      "serviceAccountClientId": "wonder-core",
+      "clientRoles": {
+        "realm-management": ["view-realm", "manage-users"]
       }
     }
   ]

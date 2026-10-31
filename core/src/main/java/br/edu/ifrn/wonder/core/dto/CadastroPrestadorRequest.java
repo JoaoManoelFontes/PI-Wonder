@@ -27,9 +27,6 @@ public record CadastroPrestadorRequest(
         String estado,
 
         @Size(max = 255)
-        String complemento,
-
-        @Size(max = 500)
-        String fotoUrl
+        String complemento
 ) {
 }

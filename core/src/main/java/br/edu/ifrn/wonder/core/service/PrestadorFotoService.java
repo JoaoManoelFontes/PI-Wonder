@@ -41,9 +41,13 @@ public class PrestadorFotoService {
         }
 
         ValidadorFoto.validar(arquivo);
-        armazenamentoFotoService.salvar(nomeObjeto(prestadorId), arquivo);
-        prestador.setFotoUrl(apiPublicUrl + caminhoFoto(prestadorId));
+        armazenarFoto(prestador, arquivo);
         return prestador;
+    }
+
+    void armazenarFoto(Prestador prestador, MultipartFile arquivo) {
+        armazenamentoFotoService.salvar(nomeObjeto(prestador.getId()), arquivo);
+        prestador.setFotoUrl(apiPublicUrl + caminhoFoto(prestador.getId()));
     }
 
     @Transactional(readOnly = true)

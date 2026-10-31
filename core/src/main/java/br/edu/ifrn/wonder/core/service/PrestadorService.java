@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import br.edu.ifrn.wonder.core.domain.PerfilUsuario;
@@ -39,9 +40,16 @@ public class PrestadorService {
     private final ServicoRepository servicoRepository;
     private final HorarioAtendimentoRepository horarioAtendimentoRepository;
     private final AgendamentoRepository agendamentoRepository;
+    private final KeycloakAdminService keycloakAdminService;
+    private final PrestadorFotoService prestadorFotoService;
 
     @Transactional
-    public Prestador cadastrarPrestador(UUID keycloakId, CadastroPrestadorRequest request) {
+    public Prestador cadastrarPrestador(UUID keycloakId, CadastroPrestadorRequest request, MultipartFile arquivo) {
+        boolean fotoInformada = arquivo != null && !arquivo.isEmpty();
+        if (fotoInformada) {
+            ValidadorFoto.validar(arquivo);
+        }
+
         PerfilUsuario perfilUsuario = perfilUsuarioService.buscarOuCriarPorKeycloakId(keycloakId);
 
         prestadorRepository.findByPerfilUsuarioId(perfilUsuario.getId())
@@ -59,13 +67,16 @@ public class PrestadorService {
                 .cidade(request.cidade())
                 .estado(request.estado())
                 .complemento(request.complemento())
-                .fotoUrl(request.fotoUrl())
                 .status(StatusPrestador.PENDENTE)
                 .ativo(false)
                 .enviadoEm(LocalDateTime.now())
                 .build();
 
-        return prestadorRepository.save(prestador);
+        prestador = prestadorRepository.save(prestador);
+        if (fotoInformada) {
+            prestadorFotoService.armazenarFoto(prestador, arquivo);
+        }
+        return prestador;
     }
 
     @Transactional(readOnly = true)
@@ -215,6 +226,10 @@ public class PrestadorService {
         if (novoStatus == StatusPrestador.ATIVO
                 && prestador.getPerfilUsuario().getKeycloakId().equals(adminId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Administrador não pode aprovar o próprio cadastro");
+        }
+
+        if (novoStatus == StatusPrestador.ATIVO) {
+            keycloakAdminService.adicionarRoleProvider(prestador.getPerfilUsuario().getKeycloakId());
         }
 
         switch (novoStatus) {
