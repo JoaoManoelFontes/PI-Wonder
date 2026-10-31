@@ -124,7 +124,7 @@ public class DisponibilidadeService {
                     inicio = inicio.plusMinutes(duracaoMin)) {
                 LocalDateTime fim = inicio.plusMinutes(duracaoMin);
 
-                if (!possuiConflito(inicio, fim, agendamentos)) {
+                if (inicio.isAfter(LocalDateTime.now()) && !possuiConflito(inicio, fim, agendamentos)) {
                     horariosLivres.add(new HorarioDisponivelResponse(inicio, fim));
                 }
             }
