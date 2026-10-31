@@ -12,13 +12,16 @@ import org.springframework.web.server.ResponseStatusException;
 
 import br.edu.ifrn.wonder.core.domain.PerfilUsuario;
 import br.edu.ifrn.wonder.core.domain.Categoria;
+import br.edu.ifrn.wonder.core.domain.HorarioAtendimento;
 import br.edu.ifrn.wonder.core.domain.Prestador;
+import br.edu.ifrn.wonder.core.domain.Servico;
 import br.edu.ifrn.wonder.core.domain.StatusPrestador;
 import br.edu.ifrn.wonder.core.domain.StatusAgendamento;
 import br.edu.ifrn.wonder.core.domain.StatusCategoria;
 import br.edu.ifrn.wonder.core.domain.StatusServico;
 import br.edu.ifrn.wonder.core.dto.CadastroPrestadorRequest;
 import br.edu.ifrn.wonder.core.dto.AtualizacaoPrestadorRequest;
+import br.edu.ifrn.wonder.core.dto.AtualizacaoStatusPrestadorRequest;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
 import br.edu.ifrn.wonder.core.repository.AgendamentoRepository;
 import br.edu.ifrn.wonder.core.repository.CategoriaRepository;
@@ -191,48 +194,99 @@ public class PrestadorService {
     }
 
     @Transactional(readOnly = true)
-    public Prestador detalharSolicitacaoPendente(Long id) {
-        return buscarSolicitacaoPendente(id);
+    public Prestador detalharPrestadorAdmin(Long id) {
+        return prestadorRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Prestador não encontrado"));
+    }
+
+    @Transactional(readOnly = true)
+    public List<Servico> listarServicosAdmin(Long prestadorId) {
+        return servicoRepository.findByPrestadorIdOrderByNomeAsc(prestadorId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<HorarioAtendimento> listarHorariosAdmin(Long prestadorId) {
+        return horarioAtendimentoRepository.findByPrestadorIdOrderByDiaSemanaAscHoraInicioAsc(prestadorId);
     }
 
     @Transactional
-    public Prestador aprovarSolicitacao(Long id, UUID adminId) {
-        Prestador prestador = validarSolicitacaoPendente(buscarPrestadorParaAlteracao(id));
+    public Prestador atualizarStatusAdmin(
+            Long id,
+            AtualizacaoStatusPrestadorRequest request,
+            UUID adminId) {
+        Prestador prestador = buscarPrestadorParaAlteracao(id);
+        StatusPrestador novoStatus = converterStatusAdmin(request.status());
+        validarTransicaoAdmin(prestador.getStatus(), novoStatus);
 
-        prestador.setStatus(StatusPrestador.ATIVO);
-        prestador.setAtivo(true);
-        prestador.setAprovadoEm(LocalDateTime.now());
-        prestador.setAprovadoPor(adminId.toString());
-        prestador.setMotivoRejeicao(null);
+        if (novoStatus == StatusPrestador.ATIVO
+                && prestador.getPerfilUsuario().getKeycloakId().equals(adminId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Administrador não pode aprovar o próprio cadastro");
+        }
 
+        switch (novoStatus) {
+            case ATIVO -> ativarPorAdmin(prestador, adminId);
+            case REJEITADO, RASCUNHO -> devolverPorAdmin(prestador, novoStatus, request.motivoRejeicao(), adminId);
+            case SUSPENSO -> suspenderPorAdmin(prestador);
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status de prestador inválido");
+        }
         return prestador;
     }
 
-    @Transactional
-    public Prestador reprovarSolicitacao(Long id, UUID adminId) {
-        Prestador prestador = validarSolicitacaoPendente(buscarPrestadorParaAlteracao(id));
+    private StatusPrestador converterStatusAdmin(String status) {
+        return switch (status.trim()) {
+            case "rascunho" -> StatusPrestador.RASCUNHO;
+            case "ativo" -> StatusPrestador.ATIVO;
+            case "rejeitado" -> StatusPrestador.REJEITADO;
+            case "suspenso" -> StatusPrestador.SUSPENSO;
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status de prestador inválido");
+        };
+    }
 
-        prestador.setStatus(StatusPrestador.REJEITADO);
+    private void validarTransicaoAdmin(StatusPrestador atual, StatusPrestador novo) {
+        boolean permitida = switch (atual) {
+            case PENDENTE -> novo == StatusPrestador.ATIVO
+                    || novo == StatusPrestador.REJEITADO
+                    || novo == StatusPrestador.RASCUNHO;
+            case ATIVO -> novo == StatusPrestador.SUSPENSO;
+            case SUSPENSO -> novo == StatusPrestador.ATIVO;
+            default -> false;
+        };
+        if (!permitida) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Alteração de status não permitida");
+        }
+    }
+
+    private void ativarPorAdmin(Prestador prestador, UUID adminId) {
+        if (prestador.getStatus() == StatusPrestador.PENDENTE) {
+            prestador.setAprovadoEm(LocalDateTime.now());
+            prestador.setAprovadoPor(adminId.toString());
+        }
+        prestador.setStatus(StatusPrestador.ATIVO);
+        prestador.setAtivo(true);
+        prestador.setMotivoRejeicao(null);
+    }
+
+    private void devolverPorAdmin(
+            Prestador prestador,
+            StatusPrestador novoStatus,
+            String motivo,
+            UUID adminId) {
+        if (motivo == null || motivo.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Motivo é obrigatório para rejeitar ou solicitar correção"
+            );
+        }
+        prestador.setStatus(novoStatus);
         prestador.setAtivo(false);
         prestador.setAprovadoEm(null);
         prestador.setAprovadoPor(adminId.toString());
+        prestador.setMotivoRejeicao(motivo.trim());
+    }
+
+    private void suspenderPorAdmin(Prestador prestador) {
+        prestador.setStatus(StatusPrestador.SUSPENSO);
+        prestador.setAtivo(false);
         prestador.setMotivoRejeicao(null);
-
-        return prestador;
-    }
-
-    private Prestador buscarSolicitacaoPendente(Long id) {
-        Prestador prestador = prestadorRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Prestador não encontrado"));
-
-        return validarSolicitacaoPendente(prestador);
-    }
-
-    private Prestador validarSolicitacaoPendente(Prestador prestador) {
-        if (prestador.getStatus() != StatusPrestador.PENDENTE) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Solicitação não está pendente");
-        }
-
-        return prestador;
     }
 }

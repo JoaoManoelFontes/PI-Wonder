@@ -3,11 +3,15 @@ package br.edu.ifrn.wonder.core.repository;
 import br.edu.ifrn.wonder.core.domain.Servico;
 import br.edu.ifrn.wonder.core.domain.StatusServico;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.EntityGraph;
 
 import java.util.List;
 import java.util.Optional;
 
 public interface ServicoRepository extends JpaRepository<Servico, Long> {
+
+    @EntityGraph(attributePaths = "categoria")
+    List<Servico> findByPrestadorIdOrderByNomeAsc(Long prestadorId);
 
     List<Servico> findByPrestadorIdAndStatusOrderByNomeAsc(Long prestadorId, StatusServico status);
 
