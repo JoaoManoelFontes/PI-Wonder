@@ -4,52 +4,60 @@ import java.util.List;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-import br.edu.ifrn.wonder.core.dto.PrestadorSolicitacaoDetalheResponse;
-import br.edu.ifrn.wonder.core.dto.PrestadorSolicitacaoResumoResponse;
+import br.edu.ifrn.wonder.core.domain.Prestador;
+import br.edu.ifrn.wonder.core.dto.AtualizacaoStatusPrestadorRequest;
+import br.edu.ifrn.wonder.core.dto.PrestadorAdminDetalheResponse;
+import br.edu.ifrn.wonder.core.dto.PrestadorAdminResumoResponse;
 import br.edu.ifrn.wonder.core.security.UsuarioAutenticadoProvider;
 import br.edu.ifrn.wonder.core.service.PrestadorService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/admin/prestadores/solicitacoes")
+@RequestMapping("/admin/prestadores")
 @PreAuthorize("hasRole('ADMIN')")
 public class AdminPrestadorController {
 
     private final PrestadorService prestadorService;
     private final UsuarioAutenticadoProvider usuarioAutenticadoProvider;
 
-    @GetMapping
-    List<PrestadorSolicitacaoResumoResponse> listarSolicitacoes() {
+    @GetMapping("/pendentes")
+    List<PrestadorAdminResumoResponse> listarPendentes() {
         return prestadorService.listarSolicitacoesPendentes()
                 .stream()
-                .map(PrestadorSolicitacaoResumoResponse::from)
+                .map(PrestadorAdminResumoResponse::from)
                 .toList();
     }
 
     @GetMapping("/{id}")
-    PrestadorSolicitacaoDetalheResponse detalharSolicitacao(@PathVariable Long id) {
-        return PrestadorSolicitacaoDetalheResponse.from(
-                prestadorService.detalharSolicitacaoPendente(id)
-        );
+    PrestadorAdminDetalheResponse detalharPrestador(@PathVariable("id") Long id) {
+        return montarDetalhe(prestadorService.detalharPrestadorAdmin(id));
     }
 
-    @PostMapping("/{id}/aprovar")
-    PrestadorSolicitacaoDetalheResponse aprovarSolicitacao(@PathVariable Long id) {
-        return PrestadorSolicitacaoDetalheResponse.from(
-                prestadorService.aprovarSolicitacao(id, usuarioAutenticadoProvider.getUuidUsuario())
+    @PatchMapping("/{id}/status")
+    PrestadorAdminDetalheResponse atualizarStatus(
+            @PathVariable("id") Long id,
+            @Valid @RequestBody AtualizacaoStatusPrestadorRequest request) {
+        Prestador prestador = prestadorService.atualizarStatusAdmin(
+                id,
+                request,
+                usuarioAutenticadoProvider.getUuidUsuario()
         );
+        return montarDetalhe(prestador);
     }
 
-    @PostMapping("/{id}/reprovar")
-    PrestadorSolicitacaoDetalheResponse reprovarSolicitacao(@PathVariable Long id) {
-        return PrestadorSolicitacaoDetalheResponse.from(
-                prestadorService.reprovarSolicitacao(id, usuarioAutenticadoProvider.getUuidUsuario())
+    private PrestadorAdminDetalheResponse montarDetalhe(Prestador prestador) {
+        return PrestadorAdminDetalheResponse.from(
+                prestador,
+                prestadorService.listarServicosAdmin(prestador.getId()),
+                prestadorService.listarHorariosAdmin(prestador.getId())
         );
     }
 }

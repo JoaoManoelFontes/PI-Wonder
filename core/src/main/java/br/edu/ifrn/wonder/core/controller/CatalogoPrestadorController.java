@@ -13,7 +13,6 @@ import br.edu.ifrn.wonder.core.dto.HorarioAtendimentoPublicResponse;
 import br.edu.ifrn.wonder.core.dto.CategoriaPublicResponse;
 import br.edu.ifrn.wonder.core.dto.ServicoPublicResponse;
 import br.edu.ifrn.wonder.core.service.CatalogoPublicoService;
-import br.edu.ifrn.wonder.core.service.PrestadorService;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -21,12 +20,11 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/catalogo/prestadores")
 public class CatalogoPrestadorController {
 
-    private final PrestadorService prestadorService;
     private final CatalogoPublicoService catalogoPublicoService;
 
     @GetMapping("/{prestadorId}")
     PrestadorPublicResponse buscarDetalhe(@PathVariable("prestadorId") Long prestadorId) {
-        return PrestadorPublicResponse.from(prestadorService.buscarDetalhePublico(prestadorId));
+        return PrestadorPublicResponse.from(catalogoPublicoService.buscarPrestadorPublico(prestadorId));
     }
 
     @GetMapping("/{prestadorId}/horarios")

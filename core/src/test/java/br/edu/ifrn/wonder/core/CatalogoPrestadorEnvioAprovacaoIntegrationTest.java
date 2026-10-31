@@ -92,7 +92,7 @@ class CatalogoPrestadorEnvioAprovacaoIntegrationTest {
 
         mockMvc.perform(get("/catalogo/prestadores/{id}", prestadorId))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(get("/admin/prestadores/solicitacoes")
+        mockMvc.perform(get("/admin/prestadores/pendentes")
                         .with(jwt().jwt(token -> token.subject(UUID.randomUUID().toString()))
                                 .authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
                 .andExpect(status().isOk())

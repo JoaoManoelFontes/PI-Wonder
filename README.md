@@ -194,6 +194,8 @@ Exemplos da API atual: [catálogo](docs/Catalogo-Publico-Exemplos.md), com consu
 
 Administração de categorias: [consulta, cadastro, edição, alteração de status e foto protegidos por role ADMIN](docs/Admin-Categorias.md), incluindo armazenamento no MinIO, categorias ativas e inativas, validação, duplicidade e erros de autorização.
 
+Administração de prestadores: [consulta de pendências, detalhe e alteração de status protegidos por role ADMIN](docs/Admin-Prestadores.md), incluindo aprovação, correção, rejeição, suspensão, reativação e bloqueio de autoaprovação.
+
 Disponibilidade: [exemplos das consultas de dias e horários livres](docs/Disponibilidade-Exemplos.md), com acesso sem login, parâmetros, respostas do seed, conflitos, listas vazias e critérios de validação (LW-015 e JN-015).
 
 Consumo pelo frontend: [validação e simulação dos contratos de catálogo](docs/Catalogo-Validacao-Frontend.md), com comparação ao app antigo, scripts executáveis e pendências de integração (LW-013).

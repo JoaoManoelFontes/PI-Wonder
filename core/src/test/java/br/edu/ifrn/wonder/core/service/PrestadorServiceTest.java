@@ -15,6 +15,7 @@ import br.edu.ifrn.wonder.core.domain.PerfilUsuario;
 import br.edu.ifrn.wonder.core.domain.Prestador;
 import br.edu.ifrn.wonder.core.domain.StatusPrestador;
 import br.edu.ifrn.wonder.core.dto.CadastroPrestadorRequest;
+import br.edu.ifrn.wonder.core.dto.AtualizacaoStatusPrestadorRequest;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,6 +31,7 @@ class PrestadorServiceTest {
 
     private static final UUID KEYCLOAK_ID = UUID.fromString("c2d3bc2f-b55a-40d7-9f2c-cd8d9c9ad25a");
     private static final UUID PERFIL_USUARIO_ID = UUID.fromString("9f4c1180-c5a2-4354-b0dd-2f001a24d19a");
+    private static final UUID ADMIN_ID = UUID.fromString("e3deec3e-6509-4de8-9703-70679fdc074b");
 
     @Mock
     private PerfilUsuarioService perfilUsuarioService;
@@ -113,35 +115,13 @@ class PrestadorServiceTest {
     }
 
     @Test
-    void deveBuscarDetalhePublicoDePrestadorAtivo() {
-        Prestador prestador = prestadorAtivo();
-
-        when(prestadorRepository.findByIdAndStatusAndAtivoTrue(1L, StatusPrestador.ATIVO))
-                .thenReturn(Optional.of(prestador));
-
-        Prestador resultado = prestadorService.buscarDetalhePublico(1L);
-
-        assertThat(resultado).isSameAs(prestador);
-    }
-
-    @Test
-    void deveRetornarNotFoundQuandoPrestadorNaoEstaDisponivelNoCatalogo() {
-        when(prestadorRepository.findByIdAndStatusAndAtivoTrue(1L, StatusPrestador.ATIVO))
-                .thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> prestadorService.buscarDetalhePublico(1L))
-                .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
-                        assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
-    }
-
-    @Test
-    void deveDetalharSolicitacaoPendente() {
+    void deveDetalharPrestadorParaAdmin() {
         Prestador prestador = prestadorPendente();
 
         when(prestadorRepository.findById(1L))
                 .thenReturn(Optional.of(prestador));
 
-        Prestador resultado = prestadorService.detalharSolicitacaoPendente(1L);
+        Prestador resultado = prestadorService.detalharPrestadorAdmin(1L);
 
         assertThat(resultado).isSameAs(prestador);
     }
@@ -153,12 +133,16 @@ class PrestadorServiceTest {
         when(prestadorRepository.buscarPorIdComBloqueio(1L))
                 .thenReturn(Optional.of(prestador));
 
-        Prestador resultado = prestadorService.aprovarSolicitacao(1L, KEYCLOAK_ID);
+        Prestador resultado = prestadorService.atualizarStatusAdmin(
+                1L,
+                new AtualizacaoStatusPrestadorRequest("ativo", null),
+                ADMIN_ID
+        );
 
         assertThat(resultado.getStatus()).isEqualTo(StatusPrestador.ATIVO);
         assertThat(resultado.isAtivo()).isTrue();
         assertThat(resultado.getAprovadoEm()).isNotNull();
-        assertThat(resultado.getAprovadoPor()).isEqualTo(KEYCLOAK_ID.toString());
+        assertThat(resultado.getAprovadoPor()).isEqualTo(ADMIN_ID.toString());
         assertThat(resultado.getMotivoRejeicao()).isNull();
     }
 
@@ -169,13 +153,17 @@ class PrestadorServiceTest {
         when(prestadorRepository.buscarPorIdComBloqueio(1L))
                 .thenReturn(Optional.of(prestador));
 
-        Prestador resultado = prestadorService.reprovarSolicitacao(1L, KEYCLOAK_ID);
+        Prestador resultado = prestadorService.atualizarStatusAdmin(
+                1L,
+                new AtualizacaoStatusPrestadorRequest("rejeitado", "Cadastro inconsistente"),
+                ADMIN_ID
+        );
 
         assertThat(resultado.getStatus()).isEqualTo(StatusPrestador.REJEITADO);
         assertThat(resultado.isAtivo()).isFalse();
         assertThat(resultado.getAprovadoEm()).isNull();
-        assertThat(resultado.getAprovadoPor()).isEqualTo(KEYCLOAK_ID.toString());
-        assertThat(resultado.getMotivoRejeicao()).isNull();
+        assertThat(resultado.getAprovadoPor()).isEqualTo(ADMIN_ID.toString());
+        assertThat(resultado.getMotivoRejeicao()).isEqualTo("Cadastro inconsistente");
     }
 
     @Test
@@ -183,7 +171,7 @@ class PrestadorServiceTest {
         when(prestadorRepository.findById(1L))
                 .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> prestadorService.detalharSolicitacaoPendente(1L))
+        assertThatThrownBy(() -> prestadorService.detalharPrestadorAdmin(1L))
                 .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
                         assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
     }
@@ -196,7 +184,11 @@ class PrestadorServiceTest {
         when(prestadorRepository.buscarPorIdComBloqueio(1L))
                 .thenReturn(Optional.of(prestador));
 
-        assertThatThrownBy(() -> prestadorService.aprovarSolicitacao(1L, KEYCLOAK_ID))
+        assertThatThrownBy(() -> prestadorService.atualizarStatusAdmin(
+                1L,
+                new AtualizacaoStatusPrestadorRequest("ativo", null),
+                ADMIN_ID
+        ))
                 .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
                         assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
     }
@@ -237,10 +229,4 @@ class PrestadorServiceTest {
                 .build();
     }
 
-    private Prestador prestadorAtivo() {
-        Prestador prestador = prestadorPendente();
-        prestador.setStatus(StatusPrestador.ATIVO);
-        prestador.setAtivo(true);
-        return prestador;
-    }
 }
