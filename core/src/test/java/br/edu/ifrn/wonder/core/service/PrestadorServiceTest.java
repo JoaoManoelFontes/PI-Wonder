@@ -6,7 +6,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verifyNoInteractions;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,10 +23,13 @@ import br.edu.ifrn.wonder.core.dto.AtualizacaoStatusPrestadorRequest;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -38,6 +45,12 @@ class PrestadorServiceTest {
 
     @Mock
     private PrestadorRepository prestadorRepository;
+
+    @Mock
+    private KeycloakAdminService keycloakAdminService;
+
+    @Mock
+    private PrestadorFotoService prestadorFotoService;
 
     @InjectMocks
     private PrestadorService prestadorService;
@@ -73,13 +86,26 @@ class PrestadorServiceTest {
         when(prestadorRepository.save(any(Prestador.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0, Prestador.class));
 
-        Prestador resultado = prestadorService.cadastrarPrestador(KEYCLOAK_ID, request);
+        Prestador resultado = prestadorService.cadastrarPrestador(KEYCLOAK_ID, request, null);
 
         assertThat(resultado.getPerfilUsuario()).isSameAs(perfilUsuario);
         assertThat(resultado.getNomeEstab()).isEqualTo("Studio Wonder");
         assertThat(resultado.getStatus()).isEqualTo(StatusPrestador.PENDENTE);
         assertThat(resultado.isAtivo()).isFalse();
         assertThat(resultado.getEnviadoEm()).isNotNull();
+        assertThat(resultado.getFotoUrl()).isNull();
+        verifyNoInteractions(prestadorFotoService);
+    }
+
+    @Test
+    void deveRejeitarFotoInvalidaAntesDeCriarCadastro() {
+        MockMultipartFile arquivo = new MockMultipartFile("arquivo", "foto.png", "image/png", new byte[]{1, 2, 3});
+
+        assertThatThrownBy(() -> prestadorService.cadastrarPrestador(KEYCLOAK_ID, request(), arquivo))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        erro -> assertThat(erro.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+
+        verifyNoInteractions(perfilUsuarioService, prestadorRepository, prestadorFotoService);
     }
 
     @Test
@@ -95,7 +121,7 @@ class PrestadorServiceTest {
         when(prestadorRepository.findByPerfilUsuarioId(PERFIL_USUARIO_ID))
                 .thenReturn(Optional.of(prestadorExistente));
 
-        assertThatThrownBy(() -> prestadorService.cadastrarPrestador(KEYCLOAK_ID, request()))
+        assertThatThrownBy(() -> prestadorService.cadastrarPrestador(KEYCLOAK_ID, request(), null))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("409 CONFLICT");
 
@@ -133,6 +159,12 @@ class PrestadorServiceTest {
         when(prestadorRepository.buscarPorIdComBloqueio(1L))
                 .thenReturn(Optional.of(prestador));
 
+        doAnswer(invocacao -> {
+            assertThat(prestador.getStatus()).isEqualTo(StatusPrestador.PENDENTE);
+            assertThat(prestador.isAtivo()).isFalse();
+            return null;
+        }).when(keycloakAdminService).adicionarRoleProvider(KEYCLOAK_ID);
+
         Prestador resultado = prestadorService.atualizarStatusAdmin(
                 1L,
                 new AtualizacaoStatusPrestadorRequest("ativo", null),
@@ -144,6 +176,44 @@ class PrestadorServiceTest {
         assertThat(resultado.getAprovadoEm()).isNotNull();
         assertThat(resultado.getAprovadoPor()).isEqualTo(ADMIN_ID.toString());
         assertThat(resultado.getMotivoRejeicao()).isNull();
+        verify(keycloakAdminService).adicionarRoleProvider(KEYCLOAK_ID);
+    }
+
+    @Test
+    void devePreservarSolicitacaoPendenteQuandoKeycloakFalhar() {
+        Prestador prestador = prestadorPendente();
+        prestador.setMotivoRejeicao("Histórico anterior");
+        when(prestadorRepository.buscarPorIdComBloqueio(1L)).thenReturn(Optional.of(prestador));
+        var falha = new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
+        doThrow(falha).when(keycloakAdminService).adicionarRoleProvider(KEYCLOAK_ID);
+
+        assertThatThrownBy(() -> prestadorService.atualizarStatusAdmin(
+                1L,
+                new AtualizacaoStatusPrestadorRequest("ativo", null),
+                ADMIN_ID
+        ))
+                .isSameAs(falha);
+
+        assertThat(prestador.getStatus()).isEqualTo(StatusPrestador.PENDENTE);
+        assertThat(prestador.isAtivo()).isFalse();
+        assertThat(prestador.getAprovadoEm()).isNull();
+        assertThat(prestador.getAprovadoPor()).isNull();
+        assertThat(prestador.getMotivoRejeicao()).isEqualTo("Histórico anterior");
+    }
+
+    @Test
+    void naoDeveChamarKeycloakQuandoSolicitacaoNaoExistir() {
+        when(prestadorRepository.buscarPorIdComBloqueio(1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> prestadorService.atualizarStatusAdmin(
+                1L,
+                new AtualizacaoStatusPrestadorRequest("ativo", null),
+                ADMIN_ID
+        ))
+                .isInstanceOfSatisfying(ResponseStatusException.class, excecao ->
+                        assertThat(excecao.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+
+        verifyNoInteractions(keycloakAdminService);
     }
 
     @Test
@@ -164,6 +234,7 @@ class PrestadorServiceTest {
         assertThat(resultado.getAprovadoEm()).isNull();
         assertThat(resultado.getAprovadoPor()).isEqualTo(ADMIN_ID.toString());
         assertThat(resultado.getMotivoRejeicao()).isEqualTo("Cadastro inconsistente");
+        verifyNoInteractions(keycloakAdminService);
     }
 
     @Test
@@ -191,6 +262,74 @@ class PrestadorServiceTest {
         ))
                 .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
                         assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+        verifyNoInteractions(keycloakAdminService);
+    }
+
+    @Test
+    void naoDevePermitirAutoaprovacaoNemChamarKeycloak() {
+        Prestador prestador = prestadorPendente();
+        when(prestadorRepository.buscarPorIdComBloqueio(1L)).thenReturn(Optional.of(prestador));
+
+        assertThatThrownBy(() -> prestadorService.atualizarStatusAdmin(
+                1L,
+                new AtualizacaoStatusPrestadorRequest("ativo", null),
+                KEYCLOAK_ID
+        ))
+                .isInstanceOfSatisfying(ResponseStatusException.class, excecao ->
+                        assertThat(excecao.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+
+        assertThat(prestador.getStatus()).isEqualTo(StatusPrestador.PENDENTE);
+        assertThat(prestador.isAtivo()).isFalse();
+        verifyNoInteractions(keycloakAdminService);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"PENDENTE, rascunho, RASCUNHO", "ATIVO, suspenso, SUSPENSO"})
+    void naoDeveChamarKeycloakAoCorrigirOuSuspender(
+            StatusPrestador statusAtual, String novoStatus, StatusPrestador statusEsperado) {
+        Prestador prestador = prestadorPendente();
+        prestador.setStatus(statusAtual);
+        prestador.setAtivo(statusAtual == StatusPrestador.ATIVO);
+        when(prestadorRepository.buscarPorIdComBloqueio(1L)).thenReturn(Optional.of(prestador));
+
+        Prestador resultado = prestadorService.atualizarStatusAdmin(
+                1L,
+                new AtualizacaoStatusPrestadorRequest(novoStatus, "Corrigir cadastro"),
+                ADMIN_ID
+        );
+
+        assertThat(resultado.getStatus()).isEqualTo(statusEsperado);
+        assertThat(resultado.isAtivo()).isFalse();
+        verifyNoInteractions(keycloakAdminService);
+    }
+
+    @Test
+    void deveReativarPrestadorPreservandoAprovacaoOriginal() {
+        Prestador prestador = prestadorPendente();
+        LocalDateTime aprovadoEm = LocalDateTime.of(2026, 10, 1, 10, 0);
+        UUID administradorOriginalId = UUID.fromString("1a329d3d-585d-419d-9c3b-57457a1a00b6");
+        prestador.setStatus(StatusPrestador.SUSPENSO);
+        prestador.setAprovadoEm(aprovadoEm);
+        prestador.setAprovadoPor(administradorOriginalId.toString());
+        when(prestadorRepository.buscarPorIdComBloqueio(1L)).thenReturn(Optional.of(prestador));
+
+        doAnswer(invocacao -> {
+            assertThat(prestador.getStatus()).isEqualTo(StatusPrestador.SUSPENSO);
+            assertThat(prestador.isAtivo()).isFalse();
+            return null;
+        }).when(keycloakAdminService).adicionarRoleProvider(KEYCLOAK_ID);
+
+        Prestador resultado = prestadorService.atualizarStatusAdmin(
+                1L,
+                new AtualizacaoStatusPrestadorRequest("ativo", null),
+                ADMIN_ID
+        );
+
+        assertThat(resultado.getStatus()).isEqualTo(StatusPrestador.ATIVO);
+        assertThat(resultado.isAtivo()).isTrue();
+        assertThat(resultado.getAprovadoEm()).isEqualTo(aprovadoEm);
+        assertThat(resultado.getAprovadoPor()).isEqualTo(administradorOriginalId.toString());
+        verify(keycloakAdminService).adicionarRoleProvider(KEYCLOAK_ID);
     }
 
     private PerfilUsuario perfilUsuario() {
@@ -208,8 +347,7 @@ class PrestadorServiceTest {
                 "Centro",
                 "Natal",
                 "RN",
-                "Sala 1",
-                "https://cdn.wonder.dev/studio.jpg"
+                "Sala 1"
         );
     }
 

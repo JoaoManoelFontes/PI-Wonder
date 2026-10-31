@@ -1,11 +1,14 @@
 package br.edu.ifrn.wonder.core.controller;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import br.edu.ifrn.wonder.core.domain.Prestador;
 import br.edu.ifrn.wonder.core.dto.CadastroPrestadorRequest;
@@ -23,12 +26,15 @@ public class PrestadorController {
     private final UsuarioAutenticadoProvider usuarioAutenticadoProvider;
     private final PrestadorService prestadorService;
 
-    @PostMapping()
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    PrestadorPublicResponse cadastrarPrestador(@Valid @RequestBody CadastroPrestadorRequest request) {
+    PrestadorPublicResponse cadastrarPrestador(
+            @Valid @ModelAttribute CadastroPrestadorRequest request,
+            @RequestPart(value = "arquivo", required = false) MultipartFile arquivo) {
         Prestador prestador = prestadorService.cadastrarPrestador(
                 usuarioAutenticadoProvider.getUuidUsuario(),
-                request
+                request,
+                arquivo
         );
 
         return PrestadorPublicResponse.from(prestador);

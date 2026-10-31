@@ -154,6 +154,18 @@
 	</dependencies>
 
 	<build>
+		<testResources>
+			<testResource>
+				<directory>src/test/resources</directory>
+			</testResource>
+			<testResource>
+				<directory>../infra/keycloak</directory>
+				<targetPath>keycloak</targetPath>
+				<includes>
+					<include>wonder-realm.json</include>
+				</includes>
+			</testResource>
+		</testResources>
 		<plugins>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
