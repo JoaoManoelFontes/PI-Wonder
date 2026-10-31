@@ -198,6 +198,8 @@ Administração de prestadores: [consulta de pendências, detalhe e alteração 
 
 Disponibilidade: [exemplos das consultas de dias e horários livres](docs/Disponibilidade-Exemplos.md), com acesso sem login, parâmetros, respostas do seed, conflitos, listas vazias e critérios de validação (LW-015 e JN-015).
 
+Agendamentos: [criação autenticada e listagem por cliente, prestador ou administrador](docs/Agendamentos.md), com filtro por data, validação da grade de atendimento e proteção contra reservas sobrepostas.
+
 Consumo pelo frontend: [validação e simulação dos contratos de catálogo](docs/Catalogo-Validacao-Frontend.md), com comparação ao app antigo, scripts executáveis e pendências de integração (LW-013).
 
 A pasta [`docs`](docs/) reúne o documento do Projeto Integrador 2026.2 e a documentação da versão anterior do Wonder. O material antigo serve como referência de domínio e histórico; ele não representa automaticamente a arquitetura desta nova implementação.
