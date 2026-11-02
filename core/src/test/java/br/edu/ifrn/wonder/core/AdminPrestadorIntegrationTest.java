@@ -1,6 +1,8 @@
 package br.edu.ifrn.wonder.core;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -8,12 +10,15 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doCallRealMethod;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.Locale;
+import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.LocalTime;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
@@ -44,10 +49,16 @@ import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.utility.MountableFile;
 
 import br.edu.ifrn.wonder.core.domain.PerfilUsuario;
+import br.edu.ifrn.wonder.core.domain.Categoria;
+import br.edu.ifrn.wonder.core.domain.Servico;
+import br.edu.ifrn.wonder.core.domain.HorarioAtendimento;
 import br.edu.ifrn.wonder.core.domain.Prestador;
 import br.edu.ifrn.wonder.core.domain.StatusPrestador;
 import br.edu.ifrn.wonder.core.repository.PerfilUsuarioRepository;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
+import br.edu.ifrn.wonder.core.repository.CategoriaRepository;
+import br.edu.ifrn.wonder.core.repository.ServicoRepository;
+import br.edu.ifrn.wonder.core.repository.HorarioAtendimentoRepository;
 import br.edu.ifrn.wonder.core.client.KeycloakClient;
 import br.edu.ifrn.wonder.core.dto.KeycloakRoleResponse;
 import br.edu.ifrn.wonder.core.service.KeycloakAdminService;
@@ -77,6 +88,12 @@ class AdminPrestadorIntegrationTest {
     private PerfilUsuarioRepository perfilUsuarioRepository;
     @Autowired
     private PrestadorRepository prestadorRepository;
+    @Autowired
+    private CategoriaRepository categoriaRepository;
+    @Autowired
+    private ServicoRepository servicoRepository;
+    @Autowired
+    private HorarioAtendimentoRepository horarioAtendimentoRepository;
     @MockitoSpyBean
     private KeycloakClient keycloakClient;
     @Autowired
@@ -84,6 +101,7 @@ class AdminPrestadorIntegrationTest {
 
     private Prestador prestadorCriado;
     private UUID usuarioCriado;
+    private Categoria categoriaCriada;
 
     @DynamicPropertySource
     static void propriedades(DynamicPropertyRegistry registro) {
@@ -96,8 +114,14 @@ class AdminPrestadorIntegrationTest {
     @AfterEach
     void limparDados() {
         if (prestadorCriado != null) {
+            horarioAtendimentoRepository.deleteAll(horarioAtendimentoRepository
+                    .findByPrestadorIdOrderByDiaSemanaAscHoraInicioAsc(prestadorCriado.getId()));
+            servicoRepository.deleteAll(servicoRepository.findByPrestadorIdOrderByNomeAsc(prestadorCriado.getId()));
             prestadorRepository.deleteById(prestadorCriado.getId());
             perfilUsuarioRepository.deleteById(prestadorCriado.getPerfilUsuario().getId());
+        }
+        if (categoriaCriada != null) {
+            categoriaRepository.deleteById(categoriaCriada.getId());
         }
         if (usuarioCriado != null) {
             clienteAdministrativo().delete().uri("/admin/realms/wonder/users/{id}", usuarioCriado)
@@ -146,6 +170,93 @@ class AdminPrestadorIntegrationTest {
     }
 
     @Test
+    void devePublicarOcultarERepublicarCatalogoPeloFluxoAdministrativo() throws Exception {
+        Prestador prestador = cadastrarPrestadorPelaApi();
+        categoriaCriada = categoriaRepository.saveAndFlush(Categoria.builder()
+                .nome("Categoria aprovação " + UUID.randomUUID()).build());
+        Servico servico = servicoRepository.saveAndFlush(Servico.builder()
+                .prestador(prestador).categoria(categoriaCriada).nome("Corte aprovação")
+                .preco(new BigDecimal("50.00")).duracaoMin(60).build());
+        HorarioAtendimento horario = horarioAtendimentoRepository.saveAndFlush(HorarioAtendimento.builder()
+                .prestador(prestador).diaSemana(1).horaInicio(LocalTime.of(9, 0)).horaFim(LocalTime.of(12, 0))
+                .build());
+        UUID administradorId = UUID.randomUUID();
+
+        verificarCatalogoPublico(prestador, false);
+        mockMvc.perform(comoAdministrador(requisicaoAprovacao(prestador.getId()), administradorId))
+                .andExpect(status().isOk());
+        verificarCatalogoPublico(prestador, true);
+        assertThat(rolesDoUsuario()).contains("CUSTOMER", "PROVIDER");
+        var aprovadoEm = prestadorRepository.findById(prestador.getId()).orElseThrow().getAprovadoEm();
+
+        mockMvc.perform(comoAdministrador(patch("/admin/prestadores/{id}/status", prestador.getId())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"suspenso\"}"), administradorId))
+                .andExpect(status().isOk());
+        verificarCatalogoPublico(prestador, false);
+        assertThat(servicoRepository.findById(servico.getId())).isPresent();
+        assertThat(horarioAtendimentoRepository.findById(horario.getId())).isPresent();
+
+        mockMvc.perform(comoAdministrador(requisicaoAprovacao(prestador.getId()), administradorId))
+                .andExpect(status().isOk());
+        verificarCatalogoPublico(prestador, true);
+        Prestador reativado = prestadorRepository.findById(prestador.getId()).orElseThrow();
+        assertThat(reativado.getAprovadoEm()).isEqualTo(aprovadoEm);
+        assertThat(reativado.getAprovadoPor()).isEqualTo(administradorId.toString());
+        mockMvc.perform(get("/catalogo/prestadores/{id}/servicos", prestador.getId()))
+                .andExpect(jsonPath("$[0].id").value(servico.getId().intValue()));
+        mockMvc.perform(get("/catalogo/prestadores/{id}/horarios", prestador.getId()))
+                .andExpect(jsonPath("$[0].id").value(horario.getId().intValue()));
+        mockMvc.perform(get("/catalogo/prestadores/{id}/categorias", prestador.getId()))
+                .andExpect(jsonPath("$[0].id").value(categoriaCriada.getId().intValue()));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"rejeitado", "rascunho"})
+    void deveManterCatalogoOcultoAoRejeitarOuSolicitarCorrecao(String novoStatus) throws Exception {
+        Prestador prestador = cadastrarPrestadorPelaApi();
+        mockMvc.perform(comoAdministrador(patch("/admin/prestadores/{id}/status", prestador.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"%s\",\"motivo_rejeicao\":\"Revisar cadastro\"}".formatted(novoStatus)),
+                        UUID.randomUUID()))
+                .andExpect(status().isOk());
+
+        verificarCatalogoPublico(prestador, false);
+        assertThat(rolesDoUsuario()).doesNotContain("PROVIDER");
+    }
+
+    private Prestador cadastrarPrestadorPelaApi() throws Exception {
+        UUID usuarioId = criarUsuarioKeycloak();
+        mockMvc.perform(multipart("/catalogo/prestadores")
+                        .param("nomeEstab", "Studio publicação " + usuarioId)
+                        .with(jwt().jwt(token -> token.subject(usuarioId.toString()))
+                                .authorities(new SimpleGrantedAuthority("ROLE_CUSTOMER"))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("pendente"))
+                .andExpect(jsonPath("$.ativo").value(false));
+        prestadorCriado = prestadorRepository.findByPerfilUsuarioKeycloakId(usuarioId).orElseThrow();
+        return prestadorCriado;
+    }
+
+    private void verificarCatalogoPublico(Prestador prestador, boolean publicado) throws Exception {
+        var correspondencia = publicado ? hasItem(prestador.getId().intValue()) : not(hasItem(prestador.getId().intValue()));
+        mockMvc.perform(get("/catalogo/prestadores"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[*].id", correspondencia));
+        mockMvc.perform(get("/catalogo/prestadores").param("nome", prestador.getNomeEstab()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(publicado ? 1 : 0));
+        if (categoriaCriada != null) {
+            mockMvc.perform(get("/catalogo/prestadores").param("categoria_id", categoriaCriada.getId().toString()))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$[*].id", correspondencia));
+            mockMvc.perform(get("/catalogo/prestadores").param("nome", prestador.getNomeEstab())
+                            .param("categoria_id", categoriaCriada.getId().toString()))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(publicado ? 1 : 0));
+        }
+        for (String sufixo : new String[] {"", "/servicos", "/horarios", "/categorias", "/avaliacoes"}) {
+            mockMvc.perform(get("/catalogo/prestadores/" + prestador.getId() + sufixo))
+                    .andExpect(status().is(publicado ? 200 : 404));
+        }
+    }
+
+    @Test
     void deveRetornar503EPreservarBancoQuandoKeycloakNaoConseguirAtribuirRole() throws Exception {
         Prestador prestador = criarPrestador(UUID.randomUUID(), StatusPrestador.PENDENTE);
 
@@ -157,6 +268,7 @@ class AdminPrestadorIntegrationTest {
         assertThat(salvo.isAtivo()).isFalse();
         assertThat(salvo.getAprovadoEm()).isNull();
         assertThat(salvo.getAprovadoPor()).isNull();
+        verificarCatalogoPublico(prestador, false);
     }
 
     @Test
