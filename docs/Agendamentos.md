@@ -55,7 +55,40 @@ A resposta mantém o contrato consumido pelo aplicativo:
 ]
 ```
 
-A alteração de status, o histórico e a publicação de eventos pertencem às próximas tarefas do fluxo de agendamentos.
+## Alterar status e cancelar
+
+`PATCH /agendamentos/{agendamento_id}/status` exige JWT e mantém o corpo utilizado pelo aplicativo:
+
+```json
+{
+  "status": "cancelado",
+  "motivo": "Não poderei comparecer"
+}
+```
+
+| De | Para | Quem pode |
+| --- | --- | --- |
+| `pendente` | `confirmado` | Prestador dono com papel `PROVIDER` ou administrador. |
+| `pendente` ou `confirmado` | `cancelado` | Cliente dono, prestador dono com papel `PROVIDER` ou administrador. |
+| `confirmado` | `concluido` | Prestador dono com papel `PROVIDER` ou administrador. |
+
+As regras seguem o [plano de migração](https://app.notion.com/p/Plano-migra-o-7271ec66440c82b08ed381dccd9fae3f). Não é permitida conclusão manual diretamente de `pendente`, reabertura de estados finais nem repetição da mesma transição. A listagem continua sem alterar status automaticamente.
+
+Cancelamento exige motivo não vazio (até 1.000 caracteres) e pelo menos 15 minutos de antecedência: exatamente 15 minutos são aceitos; abaixo disso, o retorno é `409`. O motivo é salvo sem espaços nas extremidades.
+
+O sucesso retorna `200` com o mesmo `AgendamentoResponse` da criação/listagem, incluindo o novo status em minúsculas. Corpo ou motivo inválido retorna `400`; JWT ausente/inválido, `401`; usuário sem permissão, `403`; agendamento inexistente, `404`; transição inválida ou cancelamento sem antecedência, `409`.
+
+Cada mudança registra status anterior, novo status, motivo, instante e UUID Keycloak do autor em `historico_agendamentos`. A migration V8 cria essa tabela. Status e histórico são gravados na mesma transação, com bloqueio do agendamento para serializar alterações concorrentes. Um cancelamento remove a reserva dos intervalos que bloqueiam disponibilidade, preservando o registro e o histórico.
+
+A publicação de eventos e o job de conclusão automática pertencem às próximas tarefas; esta rota realiza somente as transições explícitas.
+
+Com Java 21 e Docker em execução:
+
+```bash
+./mvnw -pl core -Dtest=AgendamentoStatusServiceTest,AgendamentoStatusIntegrationTest,AgendamentoCriacaoListagemIntegrationTest test
+```
+
+Os testes cobrem permissões, transições, motivo, antecedência, histórico, liberação de disponibilidade e dois cancelamentos concorrentes. Os casos de limite temporal usam relógio simulado; a integração utiliza PostgreSQL via Testcontainers e JWT simulado via MockMvc, sem login real no Keycloak ou navegação no aplicativo.
 
 ## Validar conflitos na criação
 

@@ -10,6 +10,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import br.edu.ifrn.wonder.core.dto.AgendamentoResponse;
+import br.edu.ifrn.wonder.core.dto.AtualizacaoStatusAgendamentoRequest;
 import br.edu.ifrn.wonder.core.dto.CadastroAgendamentoRequest;
 import br.edu.ifrn.wonder.core.dto.DisponibilidadeResponse;
 import br.edu.ifrn.wonder.core.dto.DiasDisponiveisResponse;
@@ -71,6 +74,20 @@ public class AgendamentoController {
             @RequestParam("servico_id") Long servicoId,
             @RequestParam("mes") @DateTimeFormat(pattern = "yyyy-MM") YearMonth mes) {
         return disponibilidadeService.calcularDiasDisponiveis(prestadorId, servicoId, mes);
+    }
+
+    @PatchMapping("/{id}/status")
+    AgendamentoResponse atualizarStatus(
+            @PathVariable("id") Long id,
+            @Valid @RequestBody AtualizacaoStatusAgendamentoRequest request,
+            Authentication autenticacao) {
+        return AgendamentoResponse.from(agendamentoService.atualizarStatus(
+                id,
+                usuarioAutenticadoProvider.getUuidUsuario(),
+                possuiPapel(autenticacao, "ROLE_ADMIN"),
+                possuiPapel(autenticacao, "ROLE_PROVIDER"),
+                request
+        ), apiPublicUrl);
     }
 
     @GetMapping("/disponibilidade")

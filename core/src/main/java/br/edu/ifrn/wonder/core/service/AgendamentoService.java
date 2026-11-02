@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -13,6 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import br.edu.ifrn.wonder.core.domain.Agendamento;
 import br.edu.ifrn.wonder.core.domain.HorarioAtendimento;
+import br.edu.ifrn.wonder.core.domain.HistoricoAgendamento;
 import br.edu.ifrn.wonder.core.domain.PerfilUsuario;
 import br.edu.ifrn.wonder.core.domain.Prestador;
 import br.edu.ifrn.wonder.core.domain.Servico;
@@ -20,8 +22,10 @@ import br.edu.ifrn.wonder.core.domain.StatusAgendamento;
 import br.edu.ifrn.wonder.core.domain.StatusPrestador;
 import br.edu.ifrn.wonder.core.domain.StatusServico;
 import br.edu.ifrn.wonder.core.dto.CadastroAgendamentoRequest;
+import br.edu.ifrn.wonder.core.dto.AtualizacaoStatusAgendamentoRequest;
 import br.edu.ifrn.wonder.core.repository.AgendamentoRepository;
 import br.edu.ifrn.wonder.core.repository.HorarioAtendimentoRepository;
+import br.edu.ifrn.wonder.core.repository.HistoricoAgendamentoRepository;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
 import br.edu.ifrn.wonder.core.repository.ServicoRepository;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +44,68 @@ public class AgendamentoService {
     private final ServicoRepository servicoRepository;
     private final HorarioAtendimentoRepository horarioAtendimentoRepository;
     private final AgendamentoRepository agendamentoRepository;
+    private final HistoricoAgendamentoRepository historicoAgendamentoRepository;
+
+    @Transactional
+    public Agendamento atualizarStatus(
+            Long id,
+            UUID keycloakId,
+            boolean administrador,
+            boolean prestador,
+            AtualizacaoStatusAgendamentoRequest request) {
+        StatusAgendamento novoStatus = interpretarStatus(request.status());
+        Agendamento agendamento = agendamentoRepository.buscarPorIdComBloqueio(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Agendamento não encontrado"));
+
+        boolean donoCliente = agendamento.getCliente().getKeycloakId().equals(keycloakId);
+        boolean donoPrestador = prestador
+                && agendamento.getPrestador().getPerfilUsuario().getKeycloakId().equals(keycloakId);
+        if (!administrador && !donoPrestador && !(donoCliente && novoStatus == StatusAgendamento.CANCELADO)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuário sem permissão para esta alteração");
+        }
+
+        StatusAgendamento statusAnterior = agendamento.getStatus();
+        boolean transicaoPermitida = switch (novoStatus) {
+            case CONFIRMADO -> statusAnterior == StatusAgendamento.PENDENTE;
+            case CANCELADO -> STATUS_QUE_BLOQUEIAM_AGENDA.contains(statusAnterior);
+            case CONCLUIDO -> statusAnterior == StatusAgendamento.CONFIRMADO;
+            case PENDENTE -> false;
+        };
+        if (!transicaoPermitida) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Transição de status não permitida");
+        }
+
+        LocalDateTime agora = LocalDateTime.now();
+        String motivo = request.motivo() == null ? null : request.motivo().strip();
+        if (novoStatus == StatusAgendamento.CANCELADO) {
+            if (motivo == null || motivo.isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe o motivo do cancelamento");
+            }
+            if (agendamento.getInicio().isBefore(agora.plusMinutes(15))) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "O cancelamento exige antecedência mínima de 15 minutos");
+            }
+        }
+
+        agendamento.setStatus(novoStatus);
+        historicoAgendamentoRepository.save(HistoricoAgendamento.builder()
+                .agendamento(agendamento)
+                .usuarioKeycloakId(keycloakId)
+                .statusAnterior(statusAnterior)
+                .statusNovo(novoStatus)
+                .alteradoEm(agora)
+                .motivo(motivo)
+                .build());
+        return agendamento;
+    }
+
+    private StatusAgendamento interpretarStatus(String status) {
+        try {
+            return StatusAgendamento.valueOf(status.strip().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status de agendamento inválido");
+        }
+    }
 
     @Transactional
     public Agendamento criar(UUID keycloakId, CadastroAgendamentoRequest request) {
