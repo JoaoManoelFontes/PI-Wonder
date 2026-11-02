@@ -18,6 +18,10 @@ import java.util.UUID;
 public interface AgendamentoRepository extends JpaRepository<Agendamento, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT agendamento FROM Agendamento agendamento WHERE agendamento.id = :id")
+    Optional<Agendamento> buscarPorIdComBloqueio(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT agendamento FROM Agendamento agendamento WHERE agendamento.id = :id AND agendamento.prestador.id = :prestadorId")
     Optional<Agendamento> buscarPorIdEPrestadorComBloqueio(@Param("id") Long id,
             @Param("prestadorId") Long prestadorId);
