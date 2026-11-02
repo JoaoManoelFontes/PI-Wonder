@@ -1,5 +1,6 @@
 package br.edu.ifrn.wonder.core;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -9,9 +10,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -20,6 +27,7 @@ import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import br.edu.ifrn.wonder.core.domain.Agendamento;
@@ -121,6 +129,13 @@ class AgendamentoCriacaoListagemIntegrationTest {
         Servico servico = criarServico(prestador, "Corte", 60, StatusServico.ATIVO);
         criarHorario(prestador, 1, "09:00", "12:00");
 
+        mockMvc.perform(get("/agendamentos/disponibilidade")
+                        .param("prestador_id", prestador.getId().toString())
+                        .param("servico_id", servico.getId().toString())
+                        .param("data", SEGUNDA_09H.toLocalDate().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.horarios[0].inicio").value("2099-01-05T09:00:00"));
+
         mockMvc.perform(post("/agendamentos")
                         .with(usuario(primeiroCliente, "ROLE_CUSTOMER"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -132,6 +147,88 @@ class AgendamentoCriacaoListagemIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(corpo(prestador.getId(), servico.getId(), SEGUNDA_09H)))
                 .andExpect(status().isConflict());
+
+        assertThat(agendamentoRepository.findByPrestadorPerfilUsuarioKeycloakIdOrderByInicioDesc(
+                prestador.getPerfilUsuario().getKeycloakId())).hasSize(1);
+
+        mockMvc.perform(get("/agendamentos/disponibilidade")
+                        .param("prestador_id", prestador.getId().toString())
+                        .param("servico_id", servico.getId().toString())
+                        .param("data", SEGUNDA_09H.toLocalDate().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.horarios.length()").value(2))
+                .andExpect(jsonPath("$.horarios[0].inicio").value("2099-01-05T10:00:00"));
+    }
+
+    @ParameterizedTest(name = "segundo início após {0} minutos: HTTP {1}, {2} reservas")
+    @CsvSource({"0, 409, 1", "30, 409, 1", "60, 201, 2"})
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void deveValidarConflitosEmCriacoesSimultaneas(
+            int deslocamentoMin, int segundoStatus, int quantidadeEsperada) throws Exception {
+        // Sem a transação externa do teste, cada requisição faz seu próprio commit.
+        PerfilUsuario primeiroCliente = criarPerfil(UUID.randomUUID());
+        PerfilUsuario segundoCliente = criarPerfil(UUID.randomUUID());
+        Prestador prestador = criarPrestadorAtivo("Studio concorrencia");
+        Servico primeiroServico = criarServico(prestador, "Corte", 60, StatusServico.ATIVO);
+        Servico segundoServico = criarServico(prestador, "Sobrancelha", 30, StatusServico.ATIVO);
+        criarHorario(prestador, 1, "09:00", "12:00");
+
+        CountDownLatch prontos = new CountDownLatch(2);
+        CountDownLatch largada = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var primeira = executor.submit(() -> criarAposLargada(
+                    primeiroCliente, prestador, primeiroServico, SEGUNDA_09H, prontos, largada));
+            var segunda = executor.submit(() -> criarAposLargada(
+                    segundoCliente, prestador, segundoServico, SEGUNDA_09H.plusMinutes(deslocamentoMin),
+                    prontos, largada));
+            boolean iniciados = prontos.await(10, TimeUnit.SECONDS);
+            largada.countDown();
+            assertThat(iniciados).as("As duas requisições devem estar prontas antes da largada").isTrue();
+            assertThat(List.of(primeira.get(30, TimeUnit.SECONDS), segunda.get(30, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(201, segundoStatus);
+
+            List<Agendamento> salvos = agendamentoRepository
+                    .findByPrestadorPerfilUsuarioKeycloakIdOrderByInicioDesc(
+                            prestador.getPerfilUsuario().getKeycloakId());
+            assertThat(salvos).hasSize(quantidadeEsperada);
+            assertThat(salvos).allSatisfy(agendamento -> {
+                assertThat(agendamento.getStatus()).isEqualTo(StatusAgendamento.PENDENTE);
+                if (agendamento.getServico().getId().equals(primeiroServico.getId())) {
+                    assertThat(agendamento.getCliente().getId()).isEqualTo(primeiroCliente.getId());
+                    assertThat(agendamento.getInicio()).isEqualTo(SEGUNDA_09H);
+                    assertThat(agendamento.getFim()).isEqualTo(SEGUNDA_09H.plusHours(1));
+                } else {
+                    assertThat(agendamento.getServico().getId()).isEqualTo(segundoServico.getId());
+                    assertThat(agendamento.getCliente().getId()).isEqualTo(segundoCliente.getId());
+                    assertThat(agendamento.getInicio()).isEqualTo(SEGUNDA_09H.plusMinutes(deslocamentoMin));
+                    assertThat(agendamento.getFim()).isEqualTo(SEGUNDA_09H.plusMinutes(deslocamentoMin + 30));
+                }
+            });
+        } finally {
+            // Remove apenas a massa desta execução; os outros testes mantêm rollback.
+            agendamentoRepository.deleteAll(agendamentoRepository
+                    .findByPrestadorPerfilUsuarioKeycloakIdOrderByInicioDesc(
+                            prestador.getPerfilUsuario().getKeycloakId()));
+            horarioAtendimentoRepository.deleteAll(horarioAtendimentoRepository
+                    .findByPrestadorIdOrderByDiaSemanaAscHoraInicioAsc(prestador.getId()));
+            servicoRepository.deleteAll(List.of(primeiroServico, segundoServico));
+            prestadorRepository.deleteById(prestador.getId());
+            perfilUsuarioRepository.deleteAll(List.of(primeiroCliente, segundoCliente, prestador.getPerfilUsuario()));
+        }
+    }
+
+    private int criarAposLargada(
+            PerfilUsuario cliente, Prestador prestador, Servico servico, LocalDateTime inicio,
+            CountDownLatch prontos, CountDownLatch largada) throws Exception {
+        prontos.countDown();
+        if (!largada.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Tempo limite aguardando a largada");
+        }
+        return mockMvc.perform(post("/agendamentos")
+                        .with(usuario(cliente.getKeycloakId(), "ROLE_CUSTOMER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpo(prestador.getId(), servico.getId(), inicio)))
+                .andReturn().getResponse().getStatus();
     }
 
     @Test
