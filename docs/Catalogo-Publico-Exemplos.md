@@ -16,6 +16,20 @@ Os sete endpoints de dados abaixo permitem consulta sem login. Envie os comandos
 
 ## Preparação
 
+### Publicação pelo fluxo administrativo
+
+O cadastro em `POST /catalogo/prestadores` inicia como `pendente`, com `ativo = false`, e permanece oculto no catálogo. A aprovação em `PATCH /admin/prestadores/{prestador_id}/status` publica o prestador após a atribuição do papel `PROVIDER` no Keycloak. Rejeição, solicitação de correção ou falha nessa atribuição não publicam o cadastro.
+
+A suspensão retira o prestador das listagens, inclusive com filtros, e suas consultas públicas de detalhe, serviços, horários, categorias e avaliações retornam `404`. A reativação o republica, preservando serviços, horários e os dados da aprovação original. O contrato administrativo está descrito em [Administração de prestadores](Admin-Prestadores.md).
+
+`AdminPrestadorIntegrationTest` valida essas transições com PostgreSQL e Keycloak temporários reais, cadastro e alterações de status pelas rotas da aplicação e consultas públicas sem autenticação. A categoria, o serviço e o horário usados no cenário são massa de teste inserida no banco. A identidade das requisições é simulada pelo Spring Security Test: não há login pelo navegador nem teste de interface.
+
+```bash
+./mvnw -pl core -Dtest=AdminPrestadorIntegrationTest,CatalogoPrestadoresIntegrationTest,CatalogoPrestadorIntegrationTest test
+```
+
+### Exemplos com o seed
+
 Inicie o `core` conforme o [README](../README.md). Os comandos abaixo consideram a porta padrão `8080`; ajuste a URL caso tenha configurado outra porta.
 
 A migration `V5__seed_catalogo_minimo.sql` cadastra o Studio Wonder com serviços, categorias e horários. Consulte seu ID no PowerShell:
