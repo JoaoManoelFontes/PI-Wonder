@@ -228,6 +228,11 @@ class AdminPrestadorIntegrationTest {
         UUID usuarioId = criarUsuarioKeycloak();
         mockMvc.perform(multipart("/catalogo/prestadores")
                         .param("nomeEstab", "Studio publicação " + usuarioId)
+                        .param("endereco", "Rua das Flores")
+                        .param("numero", "100")
+                        .param("bairro", "Centro")
+                        .param("cidade", "Natal")
+                        .param("estado", "RN")
                         .with(jwt().jwt(token -> token.subject(usuarioId.toString()))
                                 .authorities(new SimpleGrantedAuthority("ROLE_CUSTOMER"))))
                 .andExpect(status().isCreated())
@@ -386,7 +391,17 @@ class AdminPrestadorIntegrationTest {
         PerfilUsuario perfil = perfilUsuarioRepository.save(new PerfilUsuario(usuarioId));
         prestadorCriado = prestadorRepository.saveAndFlush(Prestador.builder()
                 .perfilUsuario(perfil).nomeEstab("Studio aprovação")
+                .endereco("Rua das Flores").numero("100").bairro("Centro")
+                .cidade("Natal").estado("RN")
                 .status(statusInicial).ativo(false).build());
+        categoriaCriada = categoriaRepository.saveAndFlush(Categoria.builder()
+                .nome("Categoria aprovação " + UUID.randomUUID()).build());
+        servicoRepository.saveAndFlush(Servico.builder()
+                .prestador(prestadorCriado).categoria(categoriaCriada).nome("Corte aprovação")
+                .preco(new BigDecimal("50.00")).duracaoMin(60).build());
+        horarioAtendimentoRepository.saveAndFlush(HorarioAtendimento.builder()
+                .prestador(prestadorCriado).diaSemana(1)
+                .horaInicio(LocalTime.of(9, 0)).horaFim(LocalTime.of(12, 0)).build());
         return prestadorCriado;
     }
 

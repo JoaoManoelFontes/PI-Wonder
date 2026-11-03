@@ -3,6 +3,7 @@ package br.edu.ifrn.wonder.core.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -82,13 +83,16 @@ class ServicoFotoServiceTest {
     }
 
     @Test
-    void deveValidarEstadoAntesDeBuscarServicoOuAcessarMinio() {
+    void devePermitirFotoEnquantoPrestadorCompletaSolicitacaoPendente() {
         prestador.setStatus(StatusPrestador.PENDENTE);
+        MockMultipartFile arquivo = new MockMultipartFile("file", "foto.jpg", "image/jpeg",
+                new byte[]{(byte) 0xff, (byte) 0xd8, (byte) 0xff});
         when(prestadorRepository.buscarPorIdComBloqueio(1L)).thenReturn(Optional.of(prestador));
-        assertThatThrownBy(() -> service.atualizarFoto(1L, 2L, dono, null))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        erro -> assertThat(erro.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
-        verifyNoInteractions(servicoRepository, armazenamentoFotoService);
+        when(servicoRepository.findByIdAndPrestadorId(2L, 1L)).thenReturn(Optional.of(servico));
+
+        assertThat(service.atualizarFoto(1L, 2L, dono, arquivo)).isSameAs(servico);
+        assertThat(servico.getFotoUrl()).endsWith("/catalogo/prestadores/1/servicos/2/foto");
+        verify(armazenamentoFotoService).salvar("prestadores/1/servicos/2/foto", arquivo);
     }
 
     @Test
