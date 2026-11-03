@@ -11,16 +11,26 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import br.edu.ifrn.wonder.core.domain.Categoria;
+import br.edu.ifrn.wonder.core.domain.HorarioAtendimento;
 import br.edu.ifrn.wonder.core.domain.PerfilUsuario;
 import br.edu.ifrn.wonder.core.domain.Prestador;
+import br.edu.ifrn.wonder.core.domain.Servico;
+import br.edu.ifrn.wonder.core.domain.StatusCategoria;
 import br.edu.ifrn.wonder.core.domain.StatusPrestador;
+import br.edu.ifrn.wonder.core.domain.StatusServico;
 import br.edu.ifrn.wonder.core.dto.CadastroPrestadorRequest;
 import br.edu.ifrn.wonder.core.dto.AtualizacaoStatusPrestadorRequest;
+import br.edu.ifrn.wonder.core.repository.AgendamentoRepository;
+import br.edu.ifrn.wonder.core.repository.CategoriaRepository;
+import br.edu.ifrn.wonder.core.repository.HorarioAtendimentoRepository;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
+import br.edu.ifrn.wonder.core.repository.ServicoRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -45,6 +55,18 @@ class PrestadorServiceTest {
 
     @Mock
     private PrestadorRepository prestadorRepository;
+
+    @Mock
+    private CategoriaRepository categoriaRepository;
+
+    @Mock
+    private ServicoRepository servicoRepository;
+
+    @Mock
+    private HorarioAtendimentoRepository horarioAtendimentoRepository;
+
+    @Mock
+    private AgendamentoRepository agendamentoRepository;
 
     @Mock
     private KeycloakAdminService keycloakAdminService;
@@ -155,6 +177,7 @@ class PrestadorServiceTest {
     @Test
     void deveAprovarSolicitacaoPendente() {
         Prestador prestador = prestadorPendente();
+        permitirAprovacao(prestador);
 
         when(prestadorRepository.buscarPorIdComBloqueio(1L))
                 .thenReturn(Optional.of(prestador));
@@ -182,6 +205,7 @@ class PrestadorServiceTest {
     @Test
     void devePreservarSolicitacaoPendenteQuandoKeycloakFalhar() {
         Prestador prestador = prestadorPendente();
+        permitirAprovacao(prestador);
         prestador.setMotivoRejeicao("Histórico anterior");
         when(prestadorRepository.buscarPorIdComBloqueio(1L)).thenReturn(Optional.of(prestador));
         var falha = new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
@@ -306,6 +330,7 @@ class PrestadorServiceTest {
     @Test
     void deveReativarPrestadorPreservandoAprovacaoOriginal() {
         Prestador prestador = prestadorPendente();
+        permitirAprovacao(prestador);
         LocalDateTime aprovadoEm = LocalDateTime.of(2026, 10, 1, 10, 0);
         UUID administradorOriginalId = UUID.fromString("1a329d3d-585d-419d-9c3b-57457a1a00b6");
         prestador.setStatus(StatusPrestador.SUSPENSO);
@@ -353,6 +378,7 @@ class PrestadorServiceTest {
 
     private Prestador prestadorPendente() {
         return Prestador.builder()
+                .id(1L)
                 .perfilUsuario(perfilUsuario())
                 .nomeEstab("Studio Wonder")
                 .documento("12345678900")
@@ -365,6 +391,20 @@ class PrestadorServiceTest {
                 .status(StatusPrestador.PENDENTE)
                 .ativo(false)
                 .build();
+    }
+
+    private void permitirAprovacao(Prestador prestador) {
+        Categoria categoria = Categoria.builder().id(1L).nome("Cabelo")
+                .status(StatusCategoria.ATIVA).build();
+        Servico servico = Servico.builder().id(1L).prestador(prestador).categoria(categoria)
+                .nome("Corte").preco(new java.math.BigDecimal("50.00")).duracaoMin(60)
+                .status(StatusServico.ATIVO).build();
+        HorarioAtendimento horario = HorarioAtendimento.builder().id(1L).prestador(prestador)
+                .diaSemana(1).horaInicio(LocalTime.of(9, 0)).horaFim(LocalTime.of(12, 0)).build();
+        when(servicoRepository.findByPrestadorIdAndStatusOrderByNomeAsc(1L, StatusServico.ATIVO))
+                .thenReturn(List.of(servico));
+        when(horarioAtendimentoRepository.findByPrestadorIdOrderByDiaSemanaAscHoraInicioAsc(1L))
+                .thenReturn(List.of(horario));
     }
 
 }
