@@ -87,6 +87,7 @@ class AdminPrestadorStatusIntegrationTest {
     @Test
     void deveAprovarCadastroPendente() throws Exception {
         Prestador prestador = criarPrestador(StatusPrestador.PENDENTE);
+        criarServicoEHorario(prestador);
         UUID adminId = UUID.randomUUID();
 
         mockMvc.perform(patch("/admin/prestadores/{id}/status", prestador.getId())
@@ -139,6 +140,7 @@ class AdminPrestadorStatusIntegrationTest {
     @Test
     void deveSuspenderEReativarPreservandoDadosDaAprovacao() throws Exception {
         Prestador prestador = criarPrestador(StatusPrestador.ATIVO);
+        criarServicoEHorario(prestador);
         LocalDateTime aprovadoEm = prestador.getAprovadoEm();
         String aprovadoPor = prestador.getAprovadoPor();
 
@@ -213,6 +215,9 @@ class AdminPrestadorStatusIntegrationTest {
                 .perfilUsuario(perfil)
                 .nomeEstab("Studio admin")
                 .documento("12345678900")
+                .endereco("Rua Admin")
+                .numero("10")
+                .bairro("Centro")
                 .cidade("Natal")
                 .estado("RN")
                 .status(statusPrestador)

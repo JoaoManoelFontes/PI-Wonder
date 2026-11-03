@@ -71,7 +71,7 @@ class CatalogoPrestadorEdicaoIntegrationTest {
                                  "cidade":"Parnamirim","estado":"RN","complemento":"Sala 2"}
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", aMapWithSize(13)))
+                .andExpect(jsonPath("$", aMapWithSize(14)))
                 .andExpect(jsonPath("$.id").value(prestadorId.intValue()))
                 .andExpect(jsonPath("$.perfilUsuarioId").value(perfilId.toString()))
                 .andExpect(jsonPath("$.nomeEstab").value("Studio atualizado"))
@@ -84,7 +84,8 @@ class CatalogoPrestadorEdicaoIntegrationTest {
                 .andExpect(jsonPath("$.complemento").value("Sala 2"))
                 .andExpect(jsonPath("$.status").value(situacao.name().toLowerCase(Locale.ROOT)))
                 .andExpect(jsonPath("$.ativo").value(ativo))
-                .andExpect(jsonPath("$.fotoUrl").value("https://cdn.wonder.dev/original.jpg"));
+                .andExpect(jsonPath("$.fotoUrl").value("https://cdn.wonder.dev/original.jpg"))
+                .andExpect(jsonPath("$.motivo_rejeicao").value("Motivo original"));
 
         prestadorRepository.flush();
         entityManager.clear();

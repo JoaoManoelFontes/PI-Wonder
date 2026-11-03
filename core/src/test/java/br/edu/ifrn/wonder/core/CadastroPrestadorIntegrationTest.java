@@ -54,7 +54,7 @@ class CadastroPrestadorIntegrationTest {
                         .param("fotoUrl", "https://externa.test/foto.png").param("status", "ATIVO")
                         .param("ativo", "true").param("perfilUsuarioId", outroPerfil.getId().toString()))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$", aMapWithSize(13)))
+                .andExpect(jsonPath("$", aMapWithSize(14)))
                 .andExpect(jsonPath("$.id").isNumber())
                 .andExpect(jsonPath("$.nomeEstab").value("Studio cadastro"))
                 .andExpect(jsonPath("$.documento").value("12345678900"))
@@ -66,7 +66,8 @@ class CadastroPrestadorIntegrationTest {
                 .andExpect(jsonPath("$.complemento").value("Sala 1"))
                 .andExpect(jsonPath("$.status").value("pendente"))
                 .andExpect(jsonPath("$.ativo").value(false))
-                .andExpect(jsonPath("$.fotoUrl").isEmpty());
+                .andExpect(jsonPath("$.fotoUrl").isEmpty())
+                .andExpect(jsonPath("$.motivo_rejeicao").isEmpty());
 
         PerfilUsuario perfil = perfilUsuarioRepository.findByKeycloakId(keycloakId).orElseThrow();
         Prestador prestador = prestadorRepository.findByPerfilUsuarioId(perfil.getId()).orElseThrow();
@@ -109,11 +110,15 @@ class CadastroPrestadorIntegrationTest {
         long quantidadeAntes = prestadorRepository.count();
         mockMvc.perform(multipart("/catalogo/prestadores")
                         .with(jwt().jwt(token -> token.subject(keycloakId.toString())))
-                        .param("nomeEstab", "Studio cadastro"))
+                        .param("nomeEstab", "Studio cadastro")
+                        .param("endereco", "Rua A").param("numero", "1").param("bairro", "Centro")
+                        .param("cidade", "Natal").param("estado", "RN"))
                 .andExpect(status().isCreated());
         mockMvc.perform(multipart("/catalogo/prestadores")
                         .with(jwt().jwt(token -> token.subject(keycloakId.toString())))
-                        .param("nomeEstab", "Segundo cadastro"))
+                        .param("nomeEstab", "Segundo cadastro")
+                        .param("endereco", "Rua B").param("numero", "2").param("bairro", "Centro")
+                        .param("cidade", "Natal").param("estado", "RN"))
                 .andExpect(status().isConflict());
         assertThat(prestadorRepository.count()).isEqualTo(quantidadeAntes + 1);
     }

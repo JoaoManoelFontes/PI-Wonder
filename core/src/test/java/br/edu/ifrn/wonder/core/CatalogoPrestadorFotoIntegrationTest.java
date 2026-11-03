@@ -100,9 +100,10 @@ class CatalogoPrestadorFotoIntegrationTest {
         mockMvc.perform(multipart(rota(id)).file(foto("image/png", PNG))
                         .with(jwt().jwt(token -> token.subject(dono.toString()))))
                 .andExpect(sucesso())
-                .andExpect(jsonPath("$", aMapWithSize(13)))
+                .andExpect(jsonPath("$", aMapWithSize(14)))
                 .andExpect(jsonPath("$.id").value(id.intValue()))
-                .andExpect(jsonPath("$.fotoUrl").value(url(id)));
+                .andExpect(jsonPath("$.fotoUrl").value(url(id)))
+                .andExpect(jsonPath("$.motivo_rejeicao").value("Motivo original"));
 
         prestadorRepository.flush();
         entityManager.clear();

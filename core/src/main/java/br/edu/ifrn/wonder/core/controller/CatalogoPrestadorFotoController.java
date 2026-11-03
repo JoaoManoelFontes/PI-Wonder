@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import br.edu.ifrn.wonder.core.dto.FotoPerfilConteudo;
-import br.edu.ifrn.wonder.core.dto.PrestadorPublicResponse;
+import br.edu.ifrn.wonder.core.dto.PrestadorProprioResponse;
 import br.edu.ifrn.wonder.core.security.UsuarioAutenticadoProvider;
 import br.edu.ifrn.wonder.core.service.PrestadorFotoService;
 import lombok.RequiredArgsConstructor;
@@ -31,9 +31,9 @@ public class CatalogoPrestadorFotoController {
     private final PrestadorFotoService prestadorFotoService;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    PrestadorPublicResponse atualizarFoto(@PathVariable("prestadorId") Long prestadorId,
+    PrestadorProprioResponse atualizarFoto(@PathVariable("prestadorId") Long prestadorId,
             @RequestPart("file") MultipartFile arquivo) {
-        return PrestadorPublicResponse.from(prestadorFotoService.atualizarFoto(
+        return PrestadorProprioResponse.from(prestadorFotoService.atualizarFoto(
                 prestadorId, usuarioAutenticadoProvider.getUuidUsuario(), arquivo));
     }
 
