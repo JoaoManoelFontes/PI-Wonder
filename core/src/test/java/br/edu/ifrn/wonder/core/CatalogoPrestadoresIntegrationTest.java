@@ -94,6 +94,7 @@ class CatalogoPrestadoresIntegrationTest {
                 .andExpect(jsonPath("$[0].status").value("ativo"))
                 .andExpect(jsonPath("$[0].ativo").value(true))
                 .andExpect(jsonPath("$[0].fotoUrl").value("https://cdn.wonder.dev/studio.jpg"))
+                .andExpect(jsonPath("$[0].motivo_rejeicao").doesNotExist())
                 .andExpect(jsonPath("$[1].id").value(ultimo.getId().intValue()))
                 .andExpect(jsonPath("$[1].nomeEstab").value("Z Studio publico"))
                 .andExpect(jsonPath("$[1].status").value("ativo"))

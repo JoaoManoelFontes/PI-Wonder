@@ -41,9 +41,6 @@ public class ServicoFotoService {
         if (!prestador.getPerfilUsuario().getKeycloakId().equals(keycloakId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sem permissão para modificar este prestador");
         }
-        if (prestador.getStatus() == StatusPrestador.PENDENTE) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cadastro pendente de análise não pode ser editado");
-        }
         Servico servico = servicoRepository.findByIdAndPrestadorId(servicoId, prestadorId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Serviço não encontrado"));
         ValidadorFoto.validar(arquivo);

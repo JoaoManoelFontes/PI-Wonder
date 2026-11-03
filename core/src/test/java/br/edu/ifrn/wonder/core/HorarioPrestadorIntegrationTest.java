@@ -69,7 +69,7 @@ class HorarioPrestadorIntegrationTest {
     @Autowired private EntityManager entityManager;
 
     @ParameterizedTest
-    @EnumSource(value = StatusPrestador.class, mode = EnumSource.Mode.EXCLUDE, names = "PENDENTE")
+    @EnumSource(StatusPrestador.class)
     void deveCadastrarERemoverHorarioDoDonoSemAlterarPrestador(StatusPrestador situacao) throws Exception {
         Prestador prestador = criarPrestador(situacao);
         String corpo = mockMvc.perform(autenticada("POST", prestador, 0L)
@@ -199,15 +199,6 @@ class HorarioPrestadorIntegrationTest {
                         .with(jwt().jwt(token -> token.subject(UUID.randomUUID().toString()))
                                 .authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
                 .andExpect(status().isForbidden());
-        assertThat(horarioAtendimentoRepository.findById(horario.getId())).isPresent();
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"POST", "DELETE"})
-    void deveBloquearAlteracoesDuranteAnalise(String metodo) throws Exception {
-        Prestador prestador = criarPrestador(StatusPrestador.PENDENTE);
-        HorarioAtendimento horario = criarHorario(prestador, 1, "09:00", "12:00");
-        mockMvc.perform(autenticada(metodo, prestador, horario.getId())).andExpect(status().isConflict());
         assertThat(horarioAtendimentoRepository.findById(horario.getId())).isPresent();
     }
 

@@ -13,8 +13,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import br.edu.ifrn.wonder.core.dto.PrestadorPublicResponse;
+import br.edu.ifrn.wonder.core.dto.PrestadorProprioResponse;
 import br.edu.ifrn.wonder.core.dto.CategoriaPublicResponse;
+import br.edu.ifrn.wonder.core.dto.HorarioAtendimentoPublicResponse;
+import br.edu.ifrn.wonder.core.dto.ServicoPublicResponse;
 import br.edu.ifrn.wonder.core.dto.AtualizacaoPrestadorRequest;
 import br.edu.ifrn.wonder.core.security.UsuarioAutenticadoProvider;
 import br.edu.ifrn.wonder.core.service.PrestadorService;
@@ -30,8 +32,8 @@ public class CatalogoPrestadorLogadoController {
     private final PrestadorService prestadorService;
 
     @GetMapping("/me")
-    PrestadorPublicResponse buscarMeuCadastro() {
-        return PrestadorPublicResponse.from(prestadorService.buscarPrestadorDoUsuario(
+    PrestadorProprioResponse buscarMeuCadastro() {
+        return PrestadorProprioResponse.from(prestadorService.buscarPrestadorDoUsuario(
                 usuarioAutenticadoProvider.getUuidUsuario()));
     }
 
@@ -43,17 +45,33 @@ public class CatalogoPrestadorLogadoController {
                 .toList();
     }
 
+    @GetMapping("/me/servicos")
+    List<ServicoPublicResponse> listarMeusServicos() {
+        return prestadorService.listarServicosDoUsuario(usuarioAutenticadoProvider.getUuidUsuario())
+                .stream()
+                .map(ServicoPublicResponse::from)
+                .toList();
+    }
+
+    @GetMapping("/me/horarios")
+    List<HorarioAtendimentoPublicResponse> listarMeusHorarios() {
+        return prestadorService.listarHorariosDoUsuario(usuarioAutenticadoProvider.getUuidUsuario())
+                .stream()
+                .map(HorarioAtendimentoPublicResponse::from)
+                .toList();
+    }
+
     @PutMapping("/{prestadorId}")
-    PrestadorPublicResponse atualizarCadastro(
+    PrestadorProprioResponse atualizarCadastro(
             @PathVariable("prestadorId") Long prestadorId,
             @Valid @RequestBody AtualizacaoPrestadorRequest request) {
-        return PrestadorPublicResponse.from(prestadorService.atualizarPrestador(
+        return PrestadorProprioResponse.from(prestadorService.atualizarPrestador(
                 prestadorId, usuarioAutenticadoProvider.getUuidUsuario(), request));
     }
 
     @PostMapping("/{prestadorId}/enviar-aprovacao")
-    PrestadorPublicResponse enviarParaAprovacao(@PathVariable("prestadorId") Long prestadorId) {
-        return PrestadorPublicResponse.from(prestadorService.enviarParaAprovacao(
+    PrestadorProprioResponse enviarParaAprovacao(@PathVariable("prestadorId") Long prestadorId) {
+        return PrestadorProprioResponse.from(prestadorService.enviarParaAprovacao(
                 prestadorId, usuarioAutenticadoProvider.getUuidUsuario()));
     }
 

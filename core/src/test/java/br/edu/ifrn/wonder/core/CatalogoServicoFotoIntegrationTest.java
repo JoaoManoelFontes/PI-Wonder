@@ -166,7 +166,7 @@ class CatalogoServicoFotoIntegrationTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = StatusPrestador.class, mode = EnumSource.Mode.EXCLUDE, names = "PENDENTE")
+    @EnumSource(StatusPrestador.class)
     void devePermitirUploadDoDonoSemMudarEstadoDoPrestador(StatusPrestador situacao) throws Exception {
         Prestador prestador = criarPrestador(situacao);
         Servico servico = criarServico(prestador, StatusServico.ATIVO);
@@ -250,16 +250,6 @@ class CatalogoServicoFotoIntegrationTest {
                     .andExpect(status().isNotFound());
         }
         assertThat(servicoDeOutro.getFotoUrl()).isNull();
-    }
-
-    @Test
-    void deveBloquearUploadQuandoPrestadorEstaPendente() throws Exception {
-        Prestador prestador = criarPrestador(StatusPrestador.PENDENTE);
-        Servico servico = criarServico(prestador, StatusServico.ATIVO);
-        mockMvc.perform(multipart(rota(prestador.getId(), servico.getId())).file(foto("image/png", PNG))
-                        .with(jwt().jwt(token -> token.subject(prestador.getPerfilUsuario().getKeycloakId().toString()))))
-                .andExpect(status().isConflict());
-        assertThat(servico.getFotoUrl()).isNull();
     }
 
     @Test

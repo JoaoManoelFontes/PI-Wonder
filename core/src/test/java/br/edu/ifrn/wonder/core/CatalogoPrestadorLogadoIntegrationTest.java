@@ -56,7 +56,8 @@ class CatalogoPrestadorLogadoIntegrationTest {
         Prestador prestador = prestadorRepository.save(Prestador.builder().perfilUsuario(perfil)
                 .nomeEstab("Meu estabelecimento").documento("12345678900").endereco("Rua das Flores")
                 .numero("10").bairro("Centro").cidade("Natal").estado("RN").complemento("Sala 1")
-                .fotoUrl("https://cdn.wonder.dev/meu-estabelecimento.jpg").status(situacao).ativo(false).build());
+                .fotoUrl("https://cdn.wonder.dev/meu-estabelecimento.jpg").status(situacao).ativo(false)
+                .motivoRejeicao("Corrija o documento").build());
 
         for (boolean ativo : new boolean[] {false, true}) {
             prestador.setAtivo(ativo);
@@ -67,7 +68,7 @@ class CatalogoPrestadorLogadoIntegrationTest {
                             .param("prestador_id", outroPrestador.getId().toString())
                             .param("perfilUsuarioId", outroPerfil.getId().toString()))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$", aMapWithSize(13)))
+                    .andExpect(jsonPath("$", aMapWithSize(14)))
                     .andExpect(jsonPath("$.id").value(prestador.getId().intValue()))
                     .andExpect(jsonPath("$.perfilUsuarioId").value(perfil.getId().toString()))
                     .andExpect(jsonPath("$.nomeEstab").value("Meu estabelecimento"))
@@ -80,7 +81,8 @@ class CatalogoPrestadorLogadoIntegrationTest {
                     .andExpect(jsonPath("$.complemento").value("Sala 1"))
                     .andExpect(jsonPath("$.status").value(situacao.name().toLowerCase(Locale.ROOT)))
                     .andExpect(jsonPath("$.ativo").value(ativo))
-                    .andExpect(jsonPath("$.fotoUrl").value("https://cdn.wonder.dev/meu-estabelecimento.jpg"));
+                    .andExpect(jsonPath("$.fotoUrl").value("https://cdn.wonder.dev/meu-estabelecimento.jpg"))
+                    .andExpect(jsonPath("$.motivo_rejeicao").value("Corrija o documento"));
         }
     }
 

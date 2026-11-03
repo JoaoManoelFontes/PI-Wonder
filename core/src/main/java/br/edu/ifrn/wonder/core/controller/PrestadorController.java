@@ -12,7 +12,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import br.edu.ifrn.wonder.core.domain.Prestador;
 import br.edu.ifrn.wonder.core.dto.CadastroPrestadorRequest;
-import br.edu.ifrn.wonder.core.dto.PrestadorPublicResponse;
+import br.edu.ifrn.wonder.core.dto.PrestadorProprioResponse;
 import br.edu.ifrn.wonder.core.security.UsuarioAutenticadoProvider;
 import br.edu.ifrn.wonder.core.service.PrestadorService;
 import jakarta.validation.Valid;
@@ -28,7 +28,7 @@ public class PrestadorController {
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    PrestadorPublicResponse cadastrarPrestador(
+    PrestadorProprioResponse cadastrarPrestador(
             @Valid @ModelAttribute CadastroPrestadorRequest request,
             @RequestPart(value = "arquivo", required = false) MultipartFile arquivo) {
         Prestador prestador = prestadorService.cadastrarPrestador(
@@ -37,6 +37,6 @@ public class PrestadorController {
                 arquivo
         );
 
-        return PrestadorPublicResponse.from(prestador);
+        return PrestadorProprioResponse.from(prestador);
     }
 }

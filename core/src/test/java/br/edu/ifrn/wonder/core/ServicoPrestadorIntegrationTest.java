@@ -66,7 +66,7 @@ class ServicoPrestadorIntegrationTest {
     @Autowired private EntityManager entityManager;
 
     @ParameterizedTest
-    @EnumSource(value = StatusPrestador.class, mode = EnumSource.Mode.EXCLUDE, names = "PENDENTE")
+    @EnumSource(StatusPrestador.class)
     void deveCriarEditarEInativarServicoDoDonoEAtualizarCategoriasDerivadas(StatusPrestador situacao) throws Exception {
         Prestador prestador = criarPrestador(situacao);
         Categoria categoria = criarCategoria();
@@ -139,16 +139,6 @@ class ServicoPrestadorIntegrationTest {
                         .with(jwt().jwt(token -> token.subject(UUID.randomUUID().toString()))
                                 .authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
                 .andExpect(status().isForbidden());
-        assertThat(servico.getNome()).isEqualTo("Servico original");
-        assertThat(servico.getStatus()).isEqualTo(StatusServico.ATIVO);
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"POST", "PUT", "DELETE"})
-    void deveBloquearAlteracoesDuranteAnaliseDoPrestador(String metodo) throws Exception {
-        Prestador prestador = criarPrestador(StatusPrestador.PENDENTE);
-        Servico servico = criarServico(prestador);
-        mockMvc.perform(autenticada(metodo, prestador, servico.getId())).andExpect(status().isConflict());
         assertThat(servico.getNome()).isEqualTo("Servico original");
         assertThat(servico.getStatus()).isEqualTo(StatusServico.ATIVO);
     }

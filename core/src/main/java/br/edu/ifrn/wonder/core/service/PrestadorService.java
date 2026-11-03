@@ -91,6 +91,18 @@ public class PrestadorService {
         return categoriaRepository.buscarPorPrestador(prestador.getId(), StatusCategoria.ATIVA, StatusServico.ATIVO);
     }
 
+    @Transactional(readOnly = true)
+    public List<Servico> listarServicosDoUsuario(UUID keycloakId) {
+        Prestador prestador = buscarPrestadorDoUsuario(keycloakId);
+        return servicoRepository.findByPrestadorIdAndStatusOrderByNomeAsc(prestador.getId(), StatusServico.ATIVO);
+    }
+
+    @Transactional(readOnly = true)
+    public List<HorarioAtendimento> listarHorariosDoUsuario(UUID keycloakId) {
+        Prestador prestador = buscarPrestadorDoUsuario(keycloakId);
+        return horarioAtendimentoRepository.findByPrestadorIdOrderByDiaSemanaAscHoraInicioAsc(prestador.getId());
+    }
+
     @Transactional
     public Prestador atualizarPrestador(Long prestadorId, UUID keycloakId, AtualizacaoPrestadorRequest request) {
         Prestador prestador = buscarPrestadorParaAlteracao(prestadorId);
@@ -176,20 +188,31 @@ public class PrestadorService {
         if (prestador.getNomeEstab() == null || prestador.getNomeEstab().isBlank()) {
             erros.add("Informe o nome do estabelecimento");
         }
-        if (prestador.getDocumento() == null || prestador.getDocumento().isBlank()) {
-            erros.add("Informe o documento do estabelecimento");
+        validarObrigatorio(erros, prestador.getEndereco(), "Informe o endereço do estabelecimento");
+        validarObrigatorio(erros, prestador.getNumero(), "Informe o número do estabelecimento");
+        validarObrigatorio(erros, prestador.getBairro(), "Informe o bairro do estabelecimento");
+        validarObrigatorio(erros, prestador.getCidade(), "Informe a cidade do estabelecimento");
+        validarObrigatorio(erros, prestador.getEstado(), "Informe a UF do estabelecimento");
+        boolean possuiServicoValido = servicoRepository
+                .findByPrestadorIdAndStatusOrderByNomeAsc(prestador.getId(), StatusServico.ATIVO)
+                .stream()
+                .anyMatch(servico -> servico.getCategoria() != null
+                        && servico.getCategoria().getStatus() == StatusCategoria.ATIVA);
+        if (!possuiServicoValido) {
+            erros.add("Cadastre ao menos um serviço ativo com categoria ativa");
         }
-        if (servicoRepository.findByPrestadorIdAndStatusOrderByNomeAsc(prestador.getId(), StatusServico.ATIVO).isEmpty()) {
-            erros.add("Cadastre ao menos um serviço ativo");
-        }
-        if (categoriaRepository.buscarPorPrestador(prestador.getId(), StatusCategoria.ATIVA, StatusServico.ATIVO).isEmpty()) {
-            erros.add("Vincule ao menos uma categoria ativa a um serviço ativo do estabelecimento");
-        }
-        if (horarioAtendimentoRepository.findByPrestadorIdOrderByDiaSemanaAscHoraInicioAsc(prestador.getId()).isEmpty()) {
+        if (horarioAtendimentoRepository
+                .findByPrestadorIdOrderByDiaSemanaAscHoraInicioAsc(prestador.getId()).isEmpty()) {
             erros.add("Cadastre ao menos um horário de atendimento");
         }
         if (!erros.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, String.join("; ", erros));
+        }
+    }
+
+    private void validarObrigatorio(List<String> erros, String valor, String mensagem) {
+        if (valor == null || valor.isBlank()) {
+            erros.add(mensagem);
         }
     }
 
@@ -229,6 +252,7 @@ public class PrestadorService {
         }
 
         if (novoStatus == StatusPrestador.ATIVO) {
+            validarRequisitosDeEnvio(prestador);
             keycloakAdminService.adicionarRoleProvider(prestador.getPerfilUsuario().getKeycloakId());
         }
 
