@@ -78,9 +78,6 @@ public class ServicoService {
         if (!prestador.getPerfilUsuario().getKeycloakId().equals(keycloakId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sem permissão para modificar este prestador");
         }
-        if (prestador.getStatus() == StatusPrestador.PENDENTE) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cadastro pendente de análise não pode ser editado");
-        }
         return prestador;
     }
 
