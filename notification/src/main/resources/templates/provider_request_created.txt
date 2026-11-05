@@ -1,0 +1,8 @@
+Uma nova solicitação de cadastro de prestador foi criada no Wonder.
+
+Prestador: %s
+Identificador: %s
+Documento: %s
+Cidade/UF: %s/%s
+
+Acesse o aplicativo Wonder para analisar os dados completos da solicitação e aprovar ou rejeitar o cadastro.

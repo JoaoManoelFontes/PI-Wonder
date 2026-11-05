@@ -1,5 +1,6 @@
 package br.edu.ifrn.wonder.core.client;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -12,6 +13,7 @@ import org.springframework.web.client.RestClient;
 import br.edu.ifrn.wonder.core.config.KeycloakProperties;
 import br.edu.ifrn.wonder.core.dto.KeycloakRoleResponse;
 import br.edu.ifrn.wonder.core.dto.KeycloakTokenResponse;
+import br.edu.ifrn.wonder.core.dto.KeycloakUsuarioResponse;
 import lombok.RequiredArgsConstructor;
 
 @Component
@@ -66,5 +68,26 @@ public class KeycloakClient {
                 .body(List.of(role))
                 .retrieve()
                 .toBodilessEntity();
+    }
+
+    public List<KeycloakUsuarioResponse> listarUsuariosPorRole(String token, String nomeRole) {
+        int tamanhoPagina = 100;
+        List<KeycloakUsuarioResponse> usuarios = new ArrayList<>();
+        for (int inicio = 0; ; inicio += tamanhoPagina) {
+            KeycloakUsuarioResponse[] pagina = keycloakRestClient.get()
+                    .uri("/admin/realms/{realm}/roles/{role}/users?first={first}&max={max}",
+                            propriedades.realm(), nomeRole, inicio, tamanhoPagina)
+                    .headers(cabecalhos -> cabecalhos.setBearerAuth(token))
+                    .retrieve()
+                    .body(KeycloakUsuarioResponse[].class);
+
+            if (pagina == null) {
+                throw new IllegalStateException("Keycloak não retornou a lista de usuários da role");
+            }
+            usuarios.addAll(List.of(pagina));
+            if (pagina.length < tamanhoPagina) {
+                return usuarios;
+            }
+        }
     }
 }

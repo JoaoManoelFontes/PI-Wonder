@@ -12,6 +12,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import java.time.Duration;
 import java.util.UUID;
+import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -94,6 +95,45 @@ class KeycloakClientTest {
         cliente = new KeycloakClient(RestClient.create("http://keycloak"), propriedades(""));
 
         assertThatThrownBy(cliente::obterToken).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void deveBuscarTodasAsPaginasDeAdministradoresComAutenticacao() {
+        String primeiraPagina = IntStream.range(0, 100)
+                .mapToObj(indice -> "{\"email\":\"admin" + indice + "@example.com\",\"enabled\":true}")
+                .collect(java.util.stream.Collectors.joining(",", "[", "]"));
+        servidor.expect(requestTo("http://keycloak/admin/realms/wonder/roles/ADMIN/users?first=0&max=100"))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("Authorization", "Bearer token"))
+                .andRespond(withSuccess(primeiraPagina, MediaType.APPLICATION_JSON));
+        servidor.expect(requestTo("http://keycloak/admin/realms/wonder/roles/ADMIN/users?first=100&max=100"))
+                .andExpect(header("Authorization", "Bearer token"))
+                .andRespond(withSuccess("[{\"email\":\"ultimo@example.com\"}]", MediaType.APPLICATION_JSON));
+
+        var usuarios = cliente.listarUsuariosPorRole("token", "ADMIN");
+
+        assertThat(usuarios).hasSize(101);
+        assertThat(usuarios.getLast().email()).isEqualTo("ultimo@example.com");
+        servidor.verify();
+    }
+
+    @Test
+    void deveAceitarListaVaziaDeAdministradores() {
+        servidor.expect(requestTo("http://keycloak/admin/realms/wonder/roles/ADMIN/users?first=0&max=100"))
+                .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+
+        assertThat(cliente.listarUsuariosPorRole("token", "ADMIN")).isEmpty();
+        servidor.verify();
+    }
+
+    @Test
+    void deveRejeitarRespostaSemListaDeUsuarios() {
+        servidor.expect(requestTo("http://keycloak/admin/realms/wonder/roles/ADMIN/users?first=0&max=100"))
+                .andRespond(withSuccess("", MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> cliente.listarUsuariosPorRole("token", "ADMIN"))
+                .isInstanceOf(IllegalStateException.class);
+        servidor.verify();
     }
 
     private KeycloakProperties propriedades(String secret) {

@@ -67,6 +67,48 @@ class ServicoPrestadorIntegrationTest {
 
     @ParameterizedTest
     @EnumSource(StatusPrestador.class)
+    void deveListarSomenteServicosAtivosDoUsuarioEmQualquerStatusDoCadastro(StatusPrestador situacao)
+            throws Exception {
+        Prestador prestador = criarPrestador(situacao);
+        Servico servicoAtivo = criarServico(prestador);
+        servicoAtivo.setNome("Barba");
+        Servico servicoInativo = criarServico(prestador);
+        servicoInativo.setNome("Acabamento");
+        servicoInativo.setStatus(StatusServico.INATIVO);
+        criarServico(criarPrestador(StatusPrestador.ATIVO));
+
+        mockMvc.perform(get("/catalogo/prestadores/me/servicos")
+                        .with(jwt().jwt(token -> token.subject(prestador.getPerfilUsuario().getKeycloakId().toString()))
+                                .authorities(new SimpleGrantedAuthority("ROLE_CUSTOMER"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(servicoAtivo.getId().intValue()))
+                .andExpect(jsonPath("$[0].prestador_id").value(prestador.getId().intValue()))
+                .andExpect(jsonPath("$[0].status").value("ativo"));
+    }
+
+    @Test
+    void deveRetornarListaVaziaQuandoUsuarioNaoPossuiServicos() throws Exception {
+        Prestador prestador = criarPrestador(StatusPrestador.PENDENTE);
+        mockMvc.perform(get("/catalogo/prestadores/me/servicos")
+                        .with(jwt().jwt(token -> token.subject(prestador.getPerfilUsuario().getKeycloakId().toString()))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    void deveRetornar404QuandoUsuarioNaoPossuiCadastroDePrestador() throws Exception {
+        mockMvc.perform(get("/catalogo/prestadores/me/servicos")
+                        .with(jwt().jwt(token -> token.subject(UUID.randomUUID().toString()))))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void deveExigirLoginParaListarMeusServicos() throws Exception {
+        mockMvc.perform(get("/catalogo/prestadores/me/servicos")).andExpect(status().isUnauthorized());
+    }
+
+    @ParameterizedTest
+    @EnumSource(StatusPrestador.class)
     void deveCriarEditarEInativarServicoDoDonoEAtualizarCategoriasDerivadas(StatusPrestador situacao) throws Exception {
         Prestador prestador = criarPrestador(situacao);
         Categoria categoria = criarCategoria();
