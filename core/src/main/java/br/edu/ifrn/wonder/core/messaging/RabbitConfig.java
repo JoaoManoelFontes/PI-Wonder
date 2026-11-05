@@ -13,9 +13,10 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitConfig {
 
 	public static final String EXCHANGE = "wonder.events";
-	public static final String NOTIFICATION_QUEUE = "wonder.notification";
+	public static final String PROVIDER_REQUEST_CREATED_QUEUE = "provider_request_created";
 	public static final String REPORT_GENERATION_QUEUE = "wonder.report.generation";
-	public static final String NOTIFICATION_ROUTING_KEY = "notification.requested";
+	public static final String PROVIDER_REQUEST_CREATED_ROUTING_KEY = "provider_request_created";
+	public static final String PROVIDER_REQUEST_CREATED_DLQ = "provider_request_created.dlq";
 	public static final String REPORT_GENERATION_ROUTING_KEY = "report.generation.requested";
 
 	@Bean
@@ -24,8 +25,14 @@ public class RabbitConfig {
 	}
 
 	@Bean
-	public Queue notificationQueue() {
-		return QueueBuilder.durable(NOTIFICATION_QUEUE).build();
+	public Queue providerRequestCreatedQueue() {
+		return QueueBuilder.durable(PROVIDER_REQUEST_CREATED_QUEUE)
+				.deadLetterExchange("").deadLetterRoutingKey(PROVIDER_REQUEST_CREATED_DLQ).build();
+	}
+
+	@Bean
+	public Queue providerRequestCreatedDeadLetterQueue() {
+		return QueueBuilder.durable(PROVIDER_REQUEST_CREATED_DLQ).build();
 	}
 
 	@Bean
@@ -34,11 +41,11 @@ public class RabbitConfig {
 	}
 
 	@Bean
-	public Binding notificationBinding(
-			@Qualifier("notificationQueue") Queue notificationQueue,
+	public Binding providerRequestCreatedBinding(
+			@Qualifier("providerRequestCreatedQueue") Queue providerRequestCreatedQueue,
 			DirectExchange wonderExchange
 	) {
-		return BindingBuilder.bind(notificationQueue).to(wonderExchange).with(NOTIFICATION_ROUTING_KEY);
+		return BindingBuilder.bind(providerRequestCreatedQueue).to(wonderExchange).with(PROVIDER_REQUEST_CREATED_ROUTING_KEY);
 	}
 
 	@Bean

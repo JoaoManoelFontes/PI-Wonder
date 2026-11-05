@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -61,6 +63,38 @@ class KeycloakAdminIntegrationTest {
         registro.add("wonder.keycloak.client-secret", () -> SECRET);
         registro.add("wonder.keycloak.connect-timeout", () -> "3s");
         registro.add("wonder.keycloak.read-timeout", () -> "5s");
+    }
+
+    @Test
+    void deveConsultarEmailsApenasDosUsuariosComRoleAdmin() {
+        String token = keycloakClient.obterToken();
+        RestClient cliente = RestClient.create(enderecoKeycloak());
+        List<UUID> usuariosCriados = new ArrayList<>();
+        String emailAdmin = "admin-" + UUID.randomUUID() + "@example.com";
+        String emailCliente = "cliente-" + UUID.randomUUID() + "@example.com";
+        try {
+            for (String email : List.of(emailAdmin, emailCliente)) {
+                var criacao = cliente.post().uri("/admin/realms/wonder/users")
+                        .headers(cabecalhos -> cabecalhos.setBearerAuth(token))
+                        .body(Map.of("username", email, "email", email, "enabled", true))
+                        .retrieve().toBodilessEntity();
+                String localizacao = criacao.getHeaders().getLocation().toString();
+                UUID usuarioId = UUID.fromString(localizacao.substring(localizacao.lastIndexOf('/') + 1));
+                usuariosCriados.add(usuarioId);
+                if (email.equals(emailAdmin)) {
+                    keycloakClient.adicionarRole(usuarioId, token, keycloakClient.buscarRole(token, "ADMIN"));
+                }
+            }
+
+            assertThat(keycloakAdminService.listarEmailsAdministradores())
+                    .contains(emailAdmin).doesNotContain(emailCliente);
+        } finally {
+            for (UUID usuarioId : usuariosCriados) {
+                cliente.delete().uri("/admin/realms/wonder/users/{id}", usuarioId)
+                        .headers(cabecalhos -> cabecalhos.setBearerAuth(token))
+                        .retrieve().toBodilessEntity();
+            }
+        }
     }
 
     @Test

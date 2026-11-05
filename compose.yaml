@@ -1,4 +1,15 @@
 services:
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    ports:
+      - "${MAILHOG_SMTP_PORT:-1025}:1025"
+      - "${MAILHOG_HTTP_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8025/"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 #  ===============Apps===============
   core:
     build:
@@ -24,7 +35,12 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      MAIL_HOST: ${MAIL_HOST:-mailhog}
+      MAIL_PORT: ${MAIL_PORT:-1025}
     depends_on:
+      mailhog:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 

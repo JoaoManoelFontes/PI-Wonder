@@ -28,17 +28,26 @@ import br.edu.ifrn.wonder.core.dto.CadastroPrestadorRequest;
 import br.edu.ifrn.wonder.core.dto.AtualizacaoStatusPrestadorRequest;
 import br.edu.ifrn.wonder.core.repository.AgendamentoRepository;
 import br.edu.ifrn.wonder.core.repository.CategoriaRepository;
+import br.edu.ifrn.wonder.core.dto.ProviderRequestCreated;
+import br.edu.ifrn.wonder.core.dto.ProviderRequestCreated.DadosPrestador;
+import br.edu.ifrn.wonder.core.messaging.RabbitProvider;
 import br.edu.ifrn.wonder.core.repository.HorarioAtendimentoRepository;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
 import br.edu.ifrn.wonder.core.repository.ServicoRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.amqp.AmqpConnectException;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
@@ -74,8 +83,118 @@ class PrestadorServiceTest {
     @Mock
     private PrestadorFotoService prestadorFotoService;
 
+    @Mock
+    private RabbitProvider rabbitProvider;
+
     @InjectMocks
     private PrestadorService prestadorService;
+
+    @BeforeEach
+    void iniciarSincronizacaoTransacao() {
+        TransactionSynchronizationManager.initSynchronization();
+    }
+
+    @AfterEach
+    void limparSincronizacaoTransacao() {
+        TransactionSynchronizationManager.clearSynchronization();
+    }
+
+    @Test
+    void deveNotificarAdministradoresSomenteAposCommitDoCadastro() {
+        configurarCadastro();
+        when(keycloakAdminService.listarEmailsAdministradores()).thenReturn(List.of("admin@example.com"));
+
+        prestadorService.cadastrarPrestador(KEYCLOAK_ID, request(), null);
+
+        verifyNoInteractions(keycloakAdminService, rabbitProvider);
+        confirmarTransacao();
+        verify(rabbitProvider).sendProviderRequestCreated(new ProviderRequestCreated(List.of("admin@example.com"),
+                new DadosPrestador(42L, "Studio Wonder", "12345678900", "Natal", "RN")));
+    }
+
+    @Test
+    void naoDeveConsultarKeycloakOuPublicarQuandoCadastroSofrerRollback() {
+        configurarCadastro();
+        prestadorService.cadastrarPrestador(KEYCLOAK_ID, request(), null);
+
+        assertThat(TransactionSynchronizationManager.getSynchronizations()).hasSize(1);
+        TransactionSynchronizationManager.getSynchronizations().forEach(sincronizacao ->
+                sincronizacao.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
+
+        verifyNoInteractions(keycloakAdminService, rabbitProvider);
+    }
+
+    @Test
+    void naoDevePublicarEventoSemDestinatarios() {
+        configurarCadastro();
+        when(keycloakAdminService.listarEmailsAdministradores()).thenReturn(List.of());
+        prestadorService.cadastrarPrestador(KEYCLOAK_ID, request(), null);
+
+        confirmarTransacao();
+
+        verifyNoInteractions(rabbitProvider);
+    }
+
+    @Test
+    void devePreservarCadastroQuandoConsultaDosAdministradoresFalharAposCommit() {
+        configurarCadastro();
+        when(keycloakAdminService.listarEmailsAdministradores())
+                .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE));
+        Prestador prestador = prestadorService.cadastrarPrestador(KEYCLOAK_ID, request(), null);
+
+        confirmarTransacao();
+
+        assertThat(prestador.getStatus()).isEqualTo(StatusPrestador.PENDENTE);
+        verifyNoInteractions(rabbitProvider);
+    }
+
+    @Test
+    void devePreservarCadastroQuandoPublicacaoFalharAposCommit() {
+        configurarCadastro();
+        when(keycloakAdminService.listarEmailsAdministradores()).thenReturn(List.of("admin@example.com"));
+        doThrow(new AmqpConnectException(new java.net.ConnectException("RabbitMQ indisponível")))
+                .when(rabbitProvider).sendProviderRequestCreated(any());
+        Prestador prestador = prestadorService.cadastrarPrestador(KEYCLOAK_ID, request(), null);
+
+        confirmarTransacao();
+
+        assertThat(prestador.getStatus()).isEqualTo(StatusPrestador.PENDENTE);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = StatusPrestador.class, names = {"RASCUNHO", "REJEITADO"})
+    void deveNotificarNovoEnvioParaAprovacaoAposCommit(StatusPrestador status) {
+        Prestador prestador = prestadorPendente();
+        prestador.setId(42L);
+        prestador.setStatus(status);
+        when(prestadorRepository.buscarPorIdComBloqueio(42L)).thenReturn(Optional.of(prestador));
+        Categoria categoria = Categoria.builder().status(StatusCategoria.ATIVA).build();
+        when(servicoRepository.findByPrestadorIdAndStatusOrderByNomeAsc(42L, StatusServico.ATIVO))
+                .thenReturn(List.of(Servico.builder().categoria(categoria).status(StatusServico.ATIVO).build()));
+        when(horarioAtendimentoRepository.findByPrestadorIdOrderByDiaSemanaAscHoraInicioAsc(42L))
+                .thenReturn(List.of(new HorarioAtendimento()));
+        when(keycloakAdminService.listarEmailsAdministradores()).thenReturn(List.of("admin@example.com"));
+
+        prestadorService.enviarParaAprovacao(42L, KEYCLOAK_ID);
+
+        verifyNoInteractions(keycloakAdminService, rabbitProvider);
+        confirmarTransacao();
+        verify(rabbitProvider).sendProviderRequestCreated(new ProviderRequestCreated(List.of("admin@example.com"),
+                new DadosPrestador(42L, "Studio Wonder", "12345678900", "Natal", "RN")));
+    }
+
+    private void confirmarTransacao() {
+        TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+    }
+
+    private void configurarCadastro() {
+        when(perfilUsuarioService.buscarOuCriarPorKeycloakId(KEYCLOAK_ID)).thenReturn(perfilUsuario());
+        when(prestadorRepository.save(any(Prestador.class))).thenAnswer(invocacao -> {
+            Prestador prestador = invocacao.getArgument(0);
+            prestador.setId(42L);
+            return prestador;
+        });
+    }
 
     @Test
     void deveBuscarPrestadorVinculadoAoUsuarioAutenticadoSemFiltroDePublicacao() {

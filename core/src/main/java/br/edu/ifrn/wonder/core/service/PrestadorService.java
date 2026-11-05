@@ -6,8 +6,11 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.amqp.AmqpException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -23,15 +26,20 @@ import br.edu.ifrn.wonder.core.domain.StatusServico;
 import br.edu.ifrn.wonder.core.dto.CadastroPrestadorRequest;
 import br.edu.ifrn.wonder.core.dto.AtualizacaoPrestadorRequest;
 import br.edu.ifrn.wonder.core.dto.AtualizacaoStatusPrestadorRequest;
+import br.edu.ifrn.wonder.core.dto.ProviderRequestCreated;
+import br.edu.ifrn.wonder.core.dto.ProviderRequestCreated.DadosPrestador;
+import br.edu.ifrn.wonder.core.messaging.RabbitProvider;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
 import br.edu.ifrn.wonder.core.repository.AgendamentoRepository;
 import br.edu.ifrn.wonder.core.repository.CategoriaRepository;
 import br.edu.ifrn.wonder.core.repository.ServicoRepository;
 import br.edu.ifrn.wonder.core.repository.HorarioAtendimentoRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PrestadorService {
 
     private final PerfilUsuarioService perfilUsuarioService;
@@ -42,6 +50,7 @@ public class PrestadorService {
     private final AgendamentoRepository agendamentoRepository;
     private final KeycloakAdminService keycloakAdminService;
     private final PrestadorFotoService prestadorFotoService;
+    private final RabbitProvider rabbitProvider;
 
     @Transactional
     public Prestador cadastrarPrestador(UUID keycloakId, CadastroPrestadorRequest request, MultipartFile arquivo) {
@@ -76,6 +85,7 @@ public class PrestadorService {
         if (fotoInformada) {
             prestadorFotoService.armazenarFoto(prestador, arquivo);
         }
+        notificarSolicitacaoAposCommit(prestador);
         return prestador;
     }
 
@@ -158,7 +168,29 @@ public class PrestadorService {
         prestador.setAtivo(false);
         prestador.setEnviadoEm(LocalDateTime.now());
         prestador.setMotivoRejeicao(null);
+        notificarSolicitacaoAposCommit(prestador);
         return prestador;
+    }
+
+    private void notificarSolicitacaoAposCommit(Prestador prestador) {
+        DadosPrestador dados = new DadosPrestador(prestador.getId(), prestador.getNomeEstab(),
+                prestador.getDocumento(), prestador.getCidade(), prestador.getEstado());
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                try {
+                    List<String> destinatarios = keycloakAdminService.listarEmailsAdministradores();
+                    if (destinatarios.isEmpty()) {
+                        log.warn("Solicitação do prestador {} sem notificação: nenhum administrador com email", dados.id());
+                        return;
+                    }
+                    rabbitProvider.sendProviderRequestCreated(new ProviderRequestCreated(destinatarios, dados));
+                } catch (ResponseStatusException | AmqpException excecao) {
+                    log.error("Falha ao notificar solicitação do prestador {} após commit; cadastro preservado",
+                            dados.id(), excecao);
+                }
+            }
+        });
     }
 
     @Transactional

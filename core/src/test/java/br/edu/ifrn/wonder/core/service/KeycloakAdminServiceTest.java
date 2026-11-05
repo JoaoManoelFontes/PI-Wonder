@@ -7,6 +7,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.when;
 
 import java.util.UUID;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import br.edu.ifrn.wonder.core.client.KeycloakClient;
 import br.edu.ifrn.wonder.core.dto.KeycloakRoleResponse;
+import br.edu.ifrn.wonder.core.dto.KeycloakUsuarioResponse;
 
 @ExtendWith(MockitoExtension.class)
 class KeycloakAdminServiceTest {
@@ -30,6 +32,30 @@ class KeycloakAdminServiceTest {
 
     @InjectMocks
     private KeycloakAdminService keycloakAdminService;
+
+    @Test
+    void deveRetornarEmailsDosAdministradoresSemBrancosOuRepeticoes() {
+        when(keycloakClient.obterToken()).thenReturn("token");
+        when(keycloakClient.listarUsuariosPorRole("token", "ADMIN")).thenReturn(List.of(
+                new KeycloakUsuarioResponse(" admin@example.com "),
+                new KeycloakUsuarioResponse(null), new KeycloakUsuarioResponse(" "),
+                new KeycloakUsuarioResponse("admin@example.com"),
+                new KeycloakUsuarioResponse("outro@example.com")));
+
+        assertThat(keycloakAdminService.listarEmailsAdministradores())
+                .containsExactly("admin@example.com", "outro@example.com");
+    }
+
+    @Test
+    void deveInformarFalhaAoConsultarAdministradores() {
+        when(keycloakClient.obterToken()).thenReturn("token");
+        when(keycloakClient.listarUsuariosPorRole("token", "ADMIN"))
+                .thenThrow(new ResourceAccessException("Keycloak indisponível"));
+
+        assertThatThrownBy(keycloakAdminService::listarEmailsAdministradores)
+                .isInstanceOfSatisfying(ResponseStatusException.class, excecao ->
+                        assertThat(excecao.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+    }
 
     @Test
     void deveAutenticarConsultarRoleEAdicionarAoUsuarioInformado() {
