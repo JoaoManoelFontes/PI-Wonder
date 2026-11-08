@@ -14,6 +14,10 @@ import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 import br.edu.ifrn.wonder.core.dto.ProviderRequestCreated;
+import br.edu.ifrn.wonder.core.dto.ProviderRequestReviewed;
+import br.edu.ifrn.wonder.core.dto.ProviderRequestReviewed.Resultado;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import br.edu.ifrn.wonder.core.dto.ProviderRequestCreated.DadosPrestador;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -42,5 +46,28 @@ class RabbitProviderTest {
     void devePreservarPublicacaoDeRelatoriosComoTexto() {
         publicador.sendReportGenerationJob("relatorio");
         verify(rabbitTemplate).convertAndSend("wonder.events", "report.generation.requested", "relatorio");
+    }
+
+    @ParameterizedTest
+    @EnumSource(Resultado.class)
+    void devePublicarResultadoComoJsonNaRotaCorreta(Resultado resultado) {
+        var solicitacao = new ProviderRequestReviewed(42L, "ana@example.com", "Salão São José",
+                resultado, resultado == Resultado.REJEITADO ? "Endereço incompleto" : null);
+        publicador.sendProviderRequestReviewed(solicitacao);
+
+        var captor = ArgumentCaptor.forClass(Message.class);
+        verify(rabbitTemplate).send(eq("wonder.events"), eq("provider_request_reviewed"), captor.capture());
+        var mensagem = captor.getValue();
+        assertThat(mensagem.getMessageProperties().getContentType()).isEqualTo("application/json");
+        var json = JsonMapper.builder().build().readTree(new String(mensagem.getBody(), StandardCharsets.UTF_8));
+        assertThat(json.path("prestadorId").asLong()).isEqualTo(42L);
+        assertThat(json.path("destinatario").asString()).isEqualTo("ana@example.com");
+        assertThat(json.path("nomeEstabelecimento").asString()).isEqualTo("Salão São José");
+        assertThat(json.path("resultado").asString()).isEqualTo(resultado.name());
+        if (resultado == Resultado.REJEITADO) {
+            assertThat(json.path("motivoRejeicao").asString()).isEqualTo("Endereço incompleto");
+        } else {
+            assertThat(json.path("motivoRejeicao").isNull()).isTrue();
+        }
     }
 }

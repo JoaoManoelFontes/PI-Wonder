@@ -46,6 +46,20 @@ public class KeycloakClient {
         return resposta.accessToken();
     }
 
+    public String buscarEmailPorKeycloakId(UUID keycloakId) {
+        String token = obterToken();
+        KeycloakUsuarioResponse resposta = keycloakRestClient.get()
+                .uri("/admin/realms/{realm}/users/{usuarioId}", propriedades.realm(), keycloakId)
+                .headers(cabecalhos -> cabecalhos.setBearerAuth(token))
+                .retrieve()
+                .body(KeycloakUsuarioResponse.class);
+
+        if (resposta == null || !StringUtils.hasText(resposta.email())) {
+            throw new IllegalStateException("Keycloak não retornou o email do usuário");
+        }
+        return resposta.email().trim();
+    }
+
     public KeycloakRoleResponse buscarRole(String token, String nomeRole) {
         KeycloakRoleResponse resposta = keycloakRestClient.get()
                 .uri("/admin/realms/{realm}/roles/{role}", propriedades.realm(), nomeRole)

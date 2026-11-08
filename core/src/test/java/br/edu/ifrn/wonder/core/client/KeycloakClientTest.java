@@ -9,6 +9,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withNoContent;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 
 import java.time.Duration;
 import java.util.UUID;
@@ -19,9 +20,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 import br.edu.ifrn.wonder.core.config.KeycloakProperties;
 import br.edu.ifrn.wonder.core.dto.KeycloakRoleResponse;
@@ -134,6 +137,50 @@ class KeycloakClientTest {
         assertThatThrownBy(() -> cliente.listarUsuariosPorRole("token", "ADMIN"))
                 .isInstanceOf(IllegalStateException.class);
         servidor.verify();
+    }
+
+    @Test
+    void deveAutenticarEBuscarEmailPeloKeycloakId() {
+        UUID keycloakId = UUID.randomUUID();
+        esperarToken();
+        servidor.expect(requestTo("http://keycloak/admin/realms/wonder/users/" + keycloakId))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("Authorization", "Bearer token"))
+                .andRespond(withSuccess("{\"email\":\" ana@example.com \",\"username\":\"ana\"}",
+                        MediaType.APPLICATION_JSON));
+
+        assertThat(cliente.buscarEmailPorKeycloakId(keycloakId)).isEqualTo("ana@example.com");
+        servidor.verify();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "{}", "{\"email\":null}", "{\"email\":\" \"}"})
+    void deveRejeitarRespostaSemEmail(String resposta) {
+        UUID keycloakId = UUID.randomUUID();
+        esperarToken();
+        servidor.expect(requestTo("http://keycloak/admin/realms/wonder/users/" + keycloakId))
+                .andRespond(withSuccess(resposta, MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> cliente.buscarEmailPorKeycloakId(keycloakId))
+                .isInstanceOf(IllegalStateException.class);
+        servidor.verify();
+    }
+
+    @Test
+    void devePropagarUsuarioNaoEncontradoNoKeycloak() {
+        UUID keycloakId = UUID.randomUUID();
+        esperarToken();
+        servidor.expect(requestTo("http://keycloak/admin/realms/wonder/users/" + keycloakId))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        assertThatThrownBy(() -> cliente.buscarEmailPorKeycloakId(keycloakId))
+                .isInstanceOf(RestClientResponseException.class);
+        servidor.verify();
+    }
+
+    private void esperarToken() {
+        servidor.expect(requestTo("http://keycloak/realms/wonder/protocol/openid-connect/token"))
+                .andRespond(withSuccess("{\"access_token\":\"token\"}", MediaType.APPLICATION_JSON));
     }
 
     private KeycloakProperties propriedades(String secret) {

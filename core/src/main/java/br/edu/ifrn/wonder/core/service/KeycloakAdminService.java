@@ -35,6 +35,15 @@ public class KeycloakAdminService {
         }
     }
 
+    public String buscarEmailPorKeycloakId(UUID keycloakId) {
+        try {
+            return keycloakClient.buscarEmailPorKeycloakId(keycloakId);
+        } catch (RestClientException | IllegalStateException excecao) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Não foi possível consultar o email do usuário no Keycloak", excecao);
+        }
+    }
+
     public void adicionarRoleProvider(UUID usuarioId) {
         try {
             String token = keycloakClient.obterToken();

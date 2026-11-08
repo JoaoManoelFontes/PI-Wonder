@@ -6,6 +6,7 @@ import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.stereotype.Component;
 
 import br.edu.ifrn.wonder.core.dto.ProviderRequestCreated;
+import br.edu.ifrn.wonder.core.dto.ProviderRequestReviewed;
 
 @Component
 public class RabbitProvider {
@@ -30,6 +31,14 @@ public class RabbitProvider {
 				RabbitConfig.EXCHANGE,
 				RabbitConfig.REPORT_GENERATION_ROUTING_KEY,
 				message
+		);
+	}
+
+	public void sendProviderRequestReviewed(ProviderRequestReviewed solicitacao) {
+		rabbitTemplate.send(
+				RabbitConfig.EXCHANGE,
+				RabbitConfig.PROVIDER_REQUEST_REVIEWED_ROUTING_KEY,
+				conversorJson.toMessage(solicitacao, new MessageProperties())
 		);
 	}
 

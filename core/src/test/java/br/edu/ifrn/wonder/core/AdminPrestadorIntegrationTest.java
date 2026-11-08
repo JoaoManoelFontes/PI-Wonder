@@ -8,6 +8,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doCallRealMethod;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -22,8 +24,10 @@ import java.time.LocalTime;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
+import java.nio.charset.StandardCharsets;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -33,6 +37,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.rabbit.core.RabbitAdmin;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -62,6 +71,10 @@ import br.edu.ifrn.wonder.core.repository.HorarioAtendimentoRepository;
 import br.edu.ifrn.wonder.core.client.KeycloakClient;
 import br.edu.ifrn.wonder.core.dto.KeycloakRoleResponse;
 import br.edu.ifrn.wonder.core.service.KeycloakAdminService;
+import br.edu.ifrn.wonder.core.service.PrestadorService;
+import br.edu.ifrn.wonder.core.dto.AtualizacaoStatusPrestadorRequest;
+import br.edu.ifrn.wonder.core.messaging.RabbitConfig;
+import tools.jackson.databind.json.JsonMapper;
 
 @Testcontainers
 @Import(TestcontainersConfiguration.class)
@@ -98,10 +111,22 @@ class AdminPrestadorIntegrationTest {
     private KeycloakClient keycloakClient;
     @Autowired
     private KeycloakAdminService keycloakAdminService;
+    @Autowired
+    private RabbitTemplate rabbitTemplate;
+    @Autowired
+    private PlatformTransactionManager gerenciadorTransacao;
+    @Autowired
+    private PrestadorService prestadorService;
 
     private Prestador prestadorCriado;
     private UUID usuarioCriado;
     private Categoria categoriaCriada;
+
+    @BeforeEach
+    void limparFilaDeResultados() {
+        new RabbitAdmin(rabbitTemplate.getConnectionFactory())
+                .purgeQueue(RabbitConfig.PROVIDER_REQUEST_REVIEWED_QUEUE);
+    }
 
     @DynamicPropertySource
     static void propriedades(DynamicPropertyRegistry registro) {
@@ -167,6 +192,41 @@ class AdminPrestadorIntegrationTest {
         } else {
             assertThat(rolesDoUsuario()).contains("CUSTOMER").doesNotContain("PROVIDER");
         }
+        Message mensagem = rabbitTemplate.receive(RabbitConfig.PROVIDER_REQUEST_REVIEWED_QUEUE, 200);
+        if ("detalhar".equals(operacao)) {
+            assertThat(mensagem).isNull();
+        } else {
+            assertThat(mensagem).isNotNull();
+            assertThat(mensagem.getMessageProperties().getContentType()).isEqualTo("application/json");
+            var evento = JsonMapper.builder().build().readTree(new String(mensagem.getBody(), StandardCharsets.UTF_8));
+            assertThat(evento.path("prestadorId").asLong()).isEqualTo(prestador.getId());
+            assertThat(evento.path("destinatario").asString()).isEqualTo("prestador@example.com");
+            assertThat(evento.path("nomeEstabelecimento").asString()).isEqualTo(prestador.getNomeEstab());
+            assertThat(evento.path("resultado").asString())
+                    .isEqualTo("aprovar".equals(operacao) ? "APROVADO" : "REJEITADO");
+            if ("reprovar".equals(operacao)) {
+                assertThat(evento.path("motivoRejeicao").asString()).isEqualTo("Cadastro inconsistente");
+            } else {
+                assertThat(evento.path("motivoRejeicao").isNull()).isTrue();
+            }
+            assertThat(rabbitTemplate.receive(RabbitConfig.PROVIDER_REQUEST_REVIEWED_QUEUE, 200)).isNull();
+        }
+    }
+
+    @Test
+    void naoDevePublicarResultadoQuandoTransacaoSofrerRollback() {
+        UUID usuarioId = criarUsuarioKeycloak();
+        Prestador prestador = criarPrestador(usuarioId, StatusPrestador.PENDENTE);
+        new TransactionTemplate(gerenciadorTransacao).executeWithoutResult(transacao -> {
+            prestadorService.atualizarStatusAdmin(prestador.getId(),
+                    new AtualizacaoStatusPrestadorRequest("rejeitado", "Cadastro inconsistente"), UUID.randomUUID());
+            transacao.setRollbackOnly();
+        });
+
+        assertThat(prestadorRepository.findById(prestador.getId()).orElseThrow().getStatus())
+                .isEqualTo(StatusPrestador.PENDENTE);
+        verify(keycloakClient, never()).buscarEmailPorKeycloakId(any());
+        assertThat(rabbitTemplate.receive(RabbitConfig.PROVIDER_REQUEST_REVIEWED_QUEUE, 200)).isNull();
     }
 
     @Test
@@ -407,7 +467,8 @@ class AdminPrestadorIntegrationTest {
 
     private UUID criarUsuarioKeycloak() {
         var resposta = clienteAdministrativo().post().uri("/admin/realms/wonder/users")
-                .body(Map.of("username", "cliente-" + UUID.randomUUID(), "enabled", true))
+                .body(Map.of("username", "cliente-" + UUID.randomUUID(), "enabled", true,
+                        "email", "prestador@example.com"))
                 .retrieve().toBodilessEntity();
         String localizacao = resposta.getHeaders().getLocation().toString();
         usuarioCriado = UUID.fromString(localizacao.substring(localizacao.lastIndexOf('/') + 1));

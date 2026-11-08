@@ -34,6 +34,32 @@ class KeycloakAdminServiceTest {
     private KeycloakAdminService keycloakAdminService;
 
     @Test
+    void deveDelegarBuscaDeEmailAoCliente() {
+        UUID keycloakId = UUID.randomUUID();
+        when(keycloakClient.buscarEmailPorKeycloakId(keycloakId)).thenReturn("ana@example.com");
+
+        assertThat(keycloakAdminService.buscarEmailPorKeycloakId(keycloakId)).isEqualTo("ana@example.com");
+        var ordem = inOrder(keycloakClient);
+        ordem.verify(keycloakClient).buscarEmailPorKeycloakId(keycloakId);
+        ordem.verifyNoMoreInteractions();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void deveTraduzirFalhaDaConsultaDeEmail(boolean falhaDeComunicacao) {
+        UUID keycloakId = UUID.randomUUID();
+        RuntimeException falha = falhaDeComunicacao ? new ResourceAccessException("Keycloak indisponível")
+                : new IllegalStateException("Email ausente");
+        when(keycloakClient.buscarEmailPorKeycloakId(keycloakId)).thenThrow(falha);
+
+        assertThatThrownBy(() -> keycloakAdminService.buscarEmailPorKeycloakId(keycloakId))
+                .isInstanceOfSatisfying(ResponseStatusException.class, excecao -> {
+                    assertThat(excecao.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+                    assertThat(excecao.getCause()).isSameAs(falha);
+                });
+    }
+
+    @Test
     void deveRetornarEmailsDosAdministradoresSemBrancosOuRepeticoes() {
         when(keycloakClient.obterToken()).thenReturn("token");
         when(keycloakClient.listarUsuariosPorRole("token", "ADMIN")).thenReturn(List.of(

@@ -30,6 +30,8 @@ import br.edu.ifrn.wonder.core.repository.AgendamentoRepository;
 import br.edu.ifrn.wonder.core.repository.CategoriaRepository;
 import br.edu.ifrn.wonder.core.dto.ProviderRequestCreated;
 import br.edu.ifrn.wonder.core.dto.ProviderRequestCreated.DadosPrestador;
+import br.edu.ifrn.wonder.core.dto.ProviderRequestReviewed;
+import br.edu.ifrn.wonder.core.dto.ProviderRequestReviewed.Resultado;
 import br.edu.ifrn.wonder.core.messaging.RabbitProvider;
 import br.edu.ifrn.wonder.core.repository.HorarioAtendimentoRepository;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
@@ -181,6 +183,90 @@ class PrestadorServiceTest {
         confirmarTransacao();
         verify(rabbitProvider).sendProviderRequestCreated(new ProviderRequestCreated(List.of("admin@example.com"),
                 new DadosPrestador(42L, "Studio Wonder", "12345678900", "Natal", "RN")));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"ativo,APROVADO", "rejeitado,REJEITADO"})
+    void deveConsultarEmailEPublicarResultadoSomenteAposCommit(String novoStatus, Resultado resultado) {
+        Prestador prestador = prestadorPendente();
+        when(prestadorRepository.buscarPorIdComBloqueio(1L)).thenReturn(Optional.of(prestador));
+        if (resultado == Resultado.APROVADO) {
+            permitirAprovacao(prestador);
+        }
+        when(keycloakAdminService.buscarEmailPorKeycloakId(KEYCLOAK_ID)).thenReturn("prestador@example.com");
+
+        prestadorService.atualizarStatusAdmin(1L,
+                new AtualizacaoStatusPrestadorRequest(novoStatus, "  Endereço incompleto  "), ADMIN_ID);
+
+        verify(keycloakAdminService, never()).buscarEmailPorKeycloakId(any());
+        verifyNoInteractions(rabbitProvider);
+        confirmarTransacao();
+
+        verify(keycloakAdminService).buscarEmailPorKeycloakId(KEYCLOAK_ID);
+        verify(rabbitProvider).sendProviderRequestReviewed(new ProviderRequestReviewed(1L,
+                "prestador@example.com", "Studio Wonder", resultado,
+                resultado == Resultado.REJEITADO ? "Endereço incompleto" : null));
+    }
+
+    @Test
+    void naoDeveConsultarEmailOuPublicarResultadoNoRollback() {
+        when(prestadorRepository.buscarPorIdComBloqueio(1L)).thenReturn(Optional.of(prestadorPendente()));
+        prestadorService.atualizarStatusAdmin(1L,
+                new AtualizacaoStatusPrestadorRequest("rejeitado", "Cadastro inconsistente"), ADMIN_ID);
+
+        assertThat(TransactionSynchronizationManager.getSynchronizations()).hasSize(1);
+        TransactionSynchronizationManager.getSynchronizations().forEach(sincronizacao ->
+                sincronizacao.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
+
+        verifyNoInteractions(keycloakAdminService, rabbitProvider);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"PENDENTE,rascunho", "ATIVO,suspenso", "SUSPENSO,ativo"})
+    void naoDeveNotificarResultadoEmOutrasTransicoes(StatusPrestador statusAnterior, String novoStatus) {
+        Prestador prestador = prestadorPendente();
+        prestador.setStatus(statusAnterior);
+        when(prestadorRepository.buscarPorIdComBloqueio(1L)).thenReturn(Optional.of(prestador));
+        if (novoStatus.equals("ativo")) {
+            permitirAprovacao(prestador);
+        }
+        prestadorService.atualizarStatusAdmin(1L,
+                new AtualizacaoStatusPrestadorRequest(novoStatus, "Corrigir cadastro"), ADMIN_ID);
+        confirmarTransacao();
+
+        assertThat(TransactionSynchronizationManager.getSynchronizations()).isEmpty();
+        verify(keycloakAdminService, never()).buscarEmailPorKeycloakId(any());
+        verifyNoInteractions(rabbitProvider);
+    }
+
+    @Test
+    void devePreservarDecisaoQuandoConsultaDeEmailFalhar() {
+        Prestador prestador = prestadorPendente();
+        when(prestadorRepository.buscarPorIdComBloqueio(1L)).thenReturn(Optional.of(prestador));
+        when(keycloakAdminService.buscarEmailPorKeycloakId(KEYCLOAK_ID))
+                .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE));
+
+        prestadorService.atualizarStatusAdmin(1L,
+                new AtualizacaoStatusPrestadorRequest("rejeitado", "Cadastro inconsistente"), ADMIN_ID);
+        confirmarTransacao();
+
+        assertThat(prestador.getStatus()).isEqualTo(StatusPrestador.REJEITADO);
+        verifyNoInteractions(rabbitProvider);
+    }
+
+    @Test
+    void devePreservarDecisaoQuandoPublicacaoDoResultadoFalhar() {
+        Prestador prestador = prestadorPendente();
+        when(prestadorRepository.buscarPorIdComBloqueio(1L)).thenReturn(Optional.of(prestador));
+        when(keycloakAdminService.buscarEmailPorKeycloakId(KEYCLOAK_ID)).thenReturn("prestador@example.com");
+        doThrow(new AmqpConnectException(new java.net.ConnectException("RabbitMQ indisponível")))
+                .when(rabbitProvider).sendProviderRequestReviewed(any());
+
+        prestadorService.atualizarStatusAdmin(1L,
+                new AtualizacaoStatusPrestadorRequest("rejeitado", "Cadastro inconsistente"), ADMIN_ID);
+        confirmarTransacao();
+
+        assertThat(prestador.getStatus()).isEqualTo(StatusPrestador.REJEITADO);
     }
 
     private void confirmarTransacao() {
