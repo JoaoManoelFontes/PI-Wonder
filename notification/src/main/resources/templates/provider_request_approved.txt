@@ -1,0 +1,7 @@
+Olá!
+
+A solicitação de cadastro do estabelecimento %s (prestador nº %s) foi aprovada.
+
+Acesse o aplicativo Wonder para gerenciar seus serviços e agendamentos.
+
+Equipe Wonder

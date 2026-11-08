@@ -15,6 +15,9 @@ import java.util.Properties;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -176,6 +179,58 @@ class EmailServiceIntegrationTest {
         Message rejeitada = rabbitTemplate.receive(RabbitConfig.PROVIDER_REQUEST_CREATED_DLQ, 15000);
         assertThat(rejeitada).isNotNull();
         assertThat(new String(rejeitada.getBody(), StandardCharsets.UTF_8)).isEqualTo(json);
+        assertThat(mensagensRecebidas()).isEmpty();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"APROVADO,aprovada", "REJEITADO,recusada"})
+    void deveConsumirResultadoDoCoreEEntregarEmailCorreto(String resultado, String descricao) throws Exception {
+        MessageProperties propriedades = new MessageProperties();
+        propriedades.setContentType("application/json");
+        propriedades.setHeader("__TypeId__", "br.edu.ifrn.wonder.core.dto.ProviderRequestReviewed");
+        String evento = """
+                {"prestadorId":42,"destinatario":"ana@example.com","nomeEstabelecimento":"Salão São José",
+                 "resultado":"%s","motivoRejeicao":"Informe o endereço completo."}
+                """.formatted(resultado);
+        rabbitTemplate.send(RabbitConfig.EXCHANGE, RabbitConfig.PROVIDER_REQUEST_REVIEWED_ROUTING_KEY,
+                new Message(evento.getBytes(StandardCharsets.UTF_8), propriedades));
+
+        List<MimeMessage> mensagens = List.of();
+        long limite = System.nanoTime() + Duration.ofSeconds(15).toNanos();
+        while (mensagens.isEmpty() && System.nanoTime() < limite) {
+            mensagens = mensagensRecebidas();
+            if (mensagens.isEmpty()) {
+                Thread.sleep(100);
+            }
+        }
+        assertThat(mensagens).hasSize(1);
+        MimeMessage mensagem = mensagens.getFirst();
+        assertThat(mensagem.getAllRecipients()).hasSize(1);
+        assertThat(mensagem.getAllRecipients()[0].toString()).isEqualTo("ana@example.com");
+        assertThat(mensagem.getSubject()).isEqualTo("Solicitação de prestador " + descricao + " no Wonder");
+        assertThat(mensagem.getContent().toString()).contains("Salão São José", "42", "foi " + descricao);
+        if (resultado.equals("REJEITADO")) {
+            assertThat(mensagem.getContent().toString()).contains("Informe o endereço completo.");
+        } else {
+            assertThat(mensagem.getContent().toString()).doesNotContain("Informe o endereço completo.");
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"REJEITADO", "DESCONHECIDO"})
+    void deveEncaminharResultadoInvalidoParaDlqSemEnviarEmail(String resultado) throws Exception {
+        MessageProperties propriedades = new MessageProperties();
+        propriedades.setContentType("application/json");
+        String evento = """
+                {"prestadorId":42,"destinatario":"ana@example.com","nomeEstabelecimento":"Salão",
+                 "resultado":"%s","motivoRejeicao":null}
+                """.formatted(resultado);
+        rabbitTemplate.send(RabbitConfig.EXCHANGE, RabbitConfig.PROVIDER_REQUEST_REVIEWED_ROUTING_KEY,
+                new Message(evento.getBytes(StandardCharsets.UTF_8), propriedades));
+
+        Message rejeitada = rabbitTemplate.receive(RabbitConfig.PROVIDER_REQUEST_REVIEWED_DLQ, 15000);
+        assertThat(rejeitada).isNotNull();
+        assertThat(new String(rejeitada.getBody(), StandardCharsets.UTF_8)).isEqualTo(evento);
         assertThat(mensagensRecebidas()).isEmpty();
     }
 

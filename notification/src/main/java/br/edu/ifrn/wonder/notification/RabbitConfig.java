@@ -14,6 +14,27 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitConfig {
 
 	public static final String EXCHANGE = "wonder.events";
+	public static final String PROVIDER_REQUEST_REVIEWED_QUEUE = "provider_request_reviewed";
+	public static final String PROVIDER_REQUEST_REVIEWED_ROUTING_KEY = "provider_request_reviewed";
+	public static final String PROVIDER_REQUEST_REVIEWED_DLQ = "provider_request_reviewed.dlq";
+
+	@Bean
+	public Queue providerRequestReviewedQueue() {
+		return QueueBuilder.durable(PROVIDER_REQUEST_REVIEWED_QUEUE)
+				.deadLetterExchange("").deadLetterRoutingKey(PROVIDER_REQUEST_REVIEWED_DLQ).build();
+	}
+
+	@Bean
+	public Queue providerRequestReviewedDeadLetterQueue() {
+		return QueueBuilder.durable(PROVIDER_REQUEST_REVIEWED_DLQ).build();
+	}
+
+	@Bean
+	public Binding providerRequestReviewedBinding(
+			@Qualifier("providerRequestReviewedQueue") Queue fila,
+			DirectExchange wonderExchange) {
+		return BindingBuilder.bind(fila).to(wonderExchange).with(PROVIDER_REQUEST_REVIEWED_ROUTING_KEY);
+	}
 	public static final String PROVIDER_REQUEST_CREATED_QUEUE = "provider_request_created";
 	public static final String PROVIDER_REQUEST_CREATED_ROUTING_KEY = "provider_request_created";
 	public static final String PROVIDER_REQUEST_CREATED_DLQ = "provider_request_created.dlq";

@@ -1,0 +1,9 @@
+Olá!
+
+A solicitação de cadastro do estabelecimento %s (prestador nº %s) foi recusada.
+
+Motivo da recusa: %s
+
+Acesse o aplicativo Wonder para revisar seu cadastro e enviá-lo novamente para análise.
+
+Equipe Wonder

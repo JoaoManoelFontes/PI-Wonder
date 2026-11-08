@@ -28,6 +28,8 @@ import br.edu.ifrn.wonder.core.dto.AtualizacaoPrestadorRequest;
 import br.edu.ifrn.wonder.core.dto.AtualizacaoStatusPrestadorRequest;
 import br.edu.ifrn.wonder.core.dto.ProviderRequestCreated;
 import br.edu.ifrn.wonder.core.dto.ProviderRequestCreated.DadosPrestador;
+import br.edu.ifrn.wonder.core.dto.ProviderRequestReviewed;
+import br.edu.ifrn.wonder.core.dto.ProviderRequestReviewed.Resultado;
 import br.edu.ifrn.wonder.core.messaging.RabbitProvider;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
 import br.edu.ifrn.wonder.core.repository.AgendamentoRepository;
@@ -275,6 +277,7 @@ public class PrestadorService {
             AtualizacaoStatusPrestadorRequest request,
             UUID adminId) {
         Prestador prestador = buscarPrestadorParaAlteracao(id);
+        StatusPrestador statusAnterior = prestador.getStatus();
         StatusPrestador novoStatus = converterStatusAdmin(request.status());
         validarTransicaoAdmin(prestador.getStatus(), novoStatus);
 
@@ -294,7 +297,33 @@ public class PrestadorService {
             case SUSPENSO -> suspenderPorAdmin(prestador);
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status de prestador inválido");
         }
+        if (statusAnterior == StatusPrestador.PENDENTE
+                && (novoStatus == StatusPrestador.ATIVO || novoStatus == StatusPrestador.REJEITADO)) {
+            notificarResultadoAposCommit(prestador);
+        }
         return prestador;
+    }
+
+    private void notificarResultadoAposCommit(Prestador prestador) {
+        Long prestadorId = prestador.getId();
+        UUID keycloakId = prestador.getPerfilUsuario().getKeycloakId();
+        String nomeEstabelecimento = prestador.getNomeEstab();
+        Resultado resultado = prestador.getStatus() == StatusPrestador.ATIVO
+                ? Resultado.APROVADO : Resultado.REJEITADO;
+        String motivoRejeicao = prestador.getMotivoRejeicao();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                try {
+                    String destinatario = keycloakAdminService.buscarEmailPorKeycloakId(keycloakId);
+                    rabbitProvider.sendProviderRequestReviewed(new ProviderRequestReviewed(prestadorId,
+                            destinatario, nomeEstabelecimento, resultado, motivoRejeicao));
+                } catch (ResponseStatusException | AmqpException excecao) {
+                    log.error("Falha ao notificar resultado da solicitação do prestador {} após commit; decisão preservada",
+                            prestadorId, excecao);
+                }
+            }
+        });
     }
 
     private StatusPrestador converterStatusAdmin(String status) {
