@@ -23,6 +23,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.server.resource.introspection.OpaqueTokenIntrospector;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -60,6 +61,7 @@ class AdminUsuarioIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired KeycloakClient keycloak;
     @Autowired PerfilUsuarioRepository perfis;
+    @Autowired OpaqueTokenIntrospector introspector;
 
     private final List<UUID> usuariosCriados = new ArrayList<>();
     private String tokenServico;
@@ -226,9 +228,13 @@ class AdminUsuarioIntegrationTest {
         var formulario = new LinkedMultiValueMap<String, String>();
         formulario.add("grant_type", "password");
         formulario.add("client_id", CLIENTE_TESTE);
+        formulario.add("scope", "openid profile email");
         formulario.add("username", keycloak.buscarUsuario(tokenServico, id).get("username").toString());
         formulario.add("password", SENHA);
-        return enviarFormulario(formulario);
+        Map<?, ?> resposta = enviarFormulario(formulario);
+        var principal = introspector.introspect(resposta.get("access_token").toString());
+        assertThat((String) principal.getAttribute("sub")).isEqualTo(id.toString());
+        return resposta;
     }
 
     private Map<?, ?> enviarFormulario(LinkedMultiValueMap<String, String> formulario) {
@@ -254,7 +260,7 @@ class AdminUsuarioIntegrationTest {
             return new String(arquivo.readAllBytes(), StandardCharsets.UTF_8).replace("\"clients\": [", """
                     "clients": [{"clientId":"validacao-usuarios","enabled":true,"protocol":"openid-connect",
                     "publicClient":true,"standardFlowEnabled":false,"directAccessGrantsEnabled":true,
-                    "fullScopeAllowed":true,"defaultClientScopes":["profile","email","roles"]},
+                    "fullScopeAllowed":true,"defaultClientScopes":["basic","profile","email","roles"]},
                     """);
         } catch (IOException excecao) {
             throw new IllegalStateException(excecao);

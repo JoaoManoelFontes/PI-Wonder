@@ -27,6 +27,8 @@ Se a atualização no Keycloak ocorrer e o logout falhar, a conta permanece desa
 
 ## Configuração
 
+O client de login deve manter os scopes padrão `basic`, `profile`, `email` e `roles`. No Keycloak 26, `basic` fornece o identificador `sub`. Tokens sem esse identificador são recusados; não se deve contornar isso aceitando um nome de usuário como identificador do perfil.
+
 A introspecção reutiliza `KEYCLOAK_SERVER_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID` e `KEYCLOAK_CLIENT_SECRET` da integração administrativa. O client confidencial `wonder-core` já possui `manage-users`; o frontend continua usando o client público `wonder-web`, sem receber o secret.
 
 `KEYCLOAK_SERVER_URL` precisa ser acessível **pelo processo do Core**: por exemplo `http://localhost:8081` quando o Core roda no computador e Keycloak no Compose, ou o endereço interno do Keycloak quando ambos rodam em containers na mesma rede. O endereço público de login do frontend continua configurado separadamente.
