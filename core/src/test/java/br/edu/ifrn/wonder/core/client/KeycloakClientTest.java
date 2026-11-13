@@ -42,6 +42,16 @@ class KeycloakClientTest {
     }
 
     @Test
+    void deveCodificarBuscaSemTransformarMaisEmEspacoOuCriarOutroParametro() {
+        servidor.expect(requestTo("http://keycloak/admin/realms/wonder/users?search=maria%2Bteste%40example.com%20%26&first=0&max=21&briefRepresentation=false"))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("Authorization", "Bearer token"))
+                .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+        assertThat(cliente.listarUsuarios("token", "maria+teste@example.com &", 0, 21)).isEmpty();
+        servidor.verify();
+    }
+
+    @Test
     void deveEnviarCredenciaisComoFormularioEAdicionarApenasARoleSolicitada() {
         UUID usuarioId = UUID.randomUUID();
         servidor.expect(requestTo("http://keycloak/realms/wonder/protocol/openid-connect/token"))

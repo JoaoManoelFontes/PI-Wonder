@@ -3,6 +3,8 @@ package br.edu.ifrn.wonder.core.client;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.Map;
+import org.springframework.core.ParameterizedTypeReference;
 
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -22,6 +24,42 @@ public class KeycloakClient {
 
     private final RestClient keycloakRestClient;
     private final KeycloakProperties propriedades;
+
+    public List<Map<String, Object>> listarUsuarios(String token, String busca, int inicio, int limite) {
+        List<Map<String, Object>> resposta = keycloakRestClient.get()
+                .uri(uri -> uri.path("/admin/realms/{realm}/users")
+                        .queryParam("search", "{busca}").queryParam("first", inicio).queryParam("max", limite)
+                        .queryParam("briefRepresentation", false)
+                        .build(Map.of("realm", propriedades.realm(), "busca", busca)))
+                .headers(cabecalhos -> cabecalhos.setBearerAuth(token)).retrieve()
+                .body(new ParameterizedTypeReference<List<Map<String, Object>>>() {});
+        if (resposta == null) {
+            throw new IllegalStateException("Keycloak não retornou os usuários");
+        }
+        return resposta;
+    }
+
+    public Map<String, Object> buscarUsuario(String token, UUID id) {
+        Map<String, Object> resposta = keycloakRestClient.get()
+                .uri("/admin/realms/{realm}/users/{id}", propriedades.realm(), id)
+                .headers(cabecalhos -> cabecalhos.setBearerAuth(token)).retrieve()
+                .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+        if (resposta == null) {
+            throw new IllegalStateException("Keycloak não retornou o usuário");
+        }
+        return resposta;
+    }
+
+    public void atualizarUsuario(String token, UUID id, Map<String, Object> usuario) {
+        keycloakRestClient.put().uri("/admin/realms/{realm}/users/{id}", propriedades.realm(), id)
+                .headers(cabecalhos -> cabecalhos.setBearerAuth(token))
+                .contentType(MediaType.APPLICATION_JSON).body(usuario).retrieve().toBodilessEntity();
+    }
+
+    public void encerrarSessoes(String token, UUID id) {
+        keycloakRestClient.post().uri("/admin/realms/{realm}/users/{id}/logout", propriedades.realm(), id)
+                .headers(cabecalhos -> cabecalhos.setBearerAuth(token)).retrieve().toBodilessEntity();
+    }
 
     public String obterToken() {
         if (!StringUtils.hasText(propriedades.clientSecret())) {

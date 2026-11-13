@@ -8,6 +8,7 @@ import org.springframework.security.authentication.AuthenticationCredentialsNotF
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 
@@ -15,7 +16,7 @@ import org.springframework.stereotype.Component;
 public class UsuarioAutenticadoProvider {
 
     public String getIdUsuario() {
-        return getJwt().getSubject();
+        return obterAtributo("sub");
     }
 
     public UUID getUuidUsuario() {
@@ -27,7 +28,20 @@ public class UsuarioAutenticadoProvider {
     }
 
     public Optional<String> getEmail() {
-        return Optional.ofNullable(getJwt().getClaimAsString("email"));
+        return Optional.ofNullable(obterAtributo("email"));
+    }
+
+    private String obterAtributo(String nome) {
+        Authentication autenticacao = SecurityContextHolder.getContext().getAuthentication();
+        if (autenticacao != null && autenticacao.isAuthenticated()) {
+            if (autenticacao.getPrincipal() instanceof OAuth2AuthenticatedPrincipal principal) {
+                return principal.getAttribute(nome);
+            }
+            if (autenticacao instanceof JwtAuthenticationToken autenticacaoJwt) {
+                return autenticacaoJwt.getToken().getClaimAsString(nome);
+            }
+        }
+        throw new AuthenticationCredentialsNotFoundException("Usuário autenticado não encontrado");
     }
 
     public Jwt getJwt() {

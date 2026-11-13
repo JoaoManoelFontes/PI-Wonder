@@ -6,8 +6,7 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -39,8 +38,9 @@ public class CatalogoPrestadorFotoController {
 
     @GetMapping
     ResponseEntity<byte[]> buscarFoto(@PathVariable("prestadorId") Long prestadorId,
-            @AuthenticationPrincipal Jwt jwt, Authentication autenticacao) {
-        UUID keycloakId = jwt == null ? null : usuarioAutenticadoProvider.getUuidUsuario();
+            Authentication autenticacao) {
+        UUID keycloakId = autenticacao == null || autenticacao instanceof AnonymousAuthenticationToken
+                ? null : usuarioAutenticadoProvider.getUuidUsuario();
         boolean administrador = autenticacao != null && autenticacao.getAuthorities().stream()
                 .anyMatch(autoridade -> autoridade.getAuthority().equals("ROLE_ADMIN"));
         FotoPerfilConteudo foto = prestadorFotoService.buscarFoto(prestadorId, keycloakId, administrador);
