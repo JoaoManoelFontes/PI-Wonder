@@ -28,8 +28,9 @@ public class KeycloakClient {
     public List<Map<String, Object>> listarUsuarios(String token, String busca, int inicio, int limite) {
         List<Map<String, Object>> resposta = keycloakRestClient.get()
                 .uri(uri -> uri.path("/admin/realms/{realm}/users")
-                        .queryParam("search", busca).queryParam("first", inicio).queryParam("max", limite)
-                        .queryParam("briefRepresentation", false).build(propriedades.realm()))
+                        .queryParam("search", "{busca}").queryParam("first", inicio).queryParam("max", limite)
+                        .queryParam("briefRepresentation", false)
+                        .build(Map.of("realm", propriedades.realm(), "busca", busca)))
                 .headers(cabecalhos -> cabecalhos.setBearerAuth(token)).retrieve()
                 .body(new ParameterizedTypeReference<List<Map<String, Object>>>() {});
         if (resposta == null) {
