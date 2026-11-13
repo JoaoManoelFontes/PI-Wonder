@@ -25,6 +25,8 @@ O aplicativo detecta o bloqueio na próxima requisição protegida: recebe `401`
 
 Se a atualização no Keycloak ocorrer e o logout falhar, a conta permanece desativada e a API responde `503`, sem anunciar sucesso completo. Consulte a conta e repita a desativação para tentar encerrar novamente as sessões. Não há rollback que reative uma conta devido a uma falha de comunicação.
 
+Antes de reativar uma conta desativada, o serviço encerra novamente suas sessões. Isso impede que uma sessão remanescente de uma falha parcial volte a funcionar após a reativação. Se essa limpeza falhar, a conta continua desativada e a API retorna `503`.
+
 ## Configuração
 
 O client de login deve manter os scopes padrão `basic`, `profile`, `email` e `roles`. No Keycloak 26, `basic` fornece o identificador `sub`. Tokens sem esse identificador são recusados; não se deve contornar isso aceitando um nome de usuário como identificador do perfil.

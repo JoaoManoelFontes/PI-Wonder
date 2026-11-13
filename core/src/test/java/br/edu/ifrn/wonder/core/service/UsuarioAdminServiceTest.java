@@ -47,6 +47,27 @@ class UsuarioAdminServiceTest {
     }
 
     @Test
+    void deveEncerrarSessoesRemanescentesAntesDeReativar() {
+        when(cliente.obterToken()).thenReturn("token");
+        when(cliente.buscarUsuario("token", id)).thenReturn(Map.of("id", id.toString(), "username", "maria", "enabled", false));
+        servico.atualizarStatus(id, true, UUID.randomUUID());
+        var ordem = inOrder(cliente);
+        ordem.verify(cliente).encerrarSessoes("token", id);
+        ordem.verify(cliente).atualizarUsuario(eq("token"), eq(id), argThat(u -> Boolean.TRUE.equals(u.get("enabled"))));
+    }
+
+    @Test
+    void deveManterContaDesativadaSeLimpezaDeSessaoFalharNaReativacao() {
+        when(cliente.obterToken()).thenReturn("token");
+        when(cliente.buscarUsuario("token", id)).thenReturn(Map.of("enabled", false));
+        doThrow(new ResourceAccessException("indisponível")).when(cliente).encerrarSessoes("token", id);
+        assertThatThrownBy(() -> servico.atualizarStatus(id, true, UUID.randomUUID()))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+        verify(cliente, never()).atualizarUsuario(anyString(), any(), any());
+    }
+
+    @Test
     void deveFalharSemAlterarContaQuandoTokenDoServicoEstiverIndisponivel() {
         when(cliente.obterToken()).thenThrow(new ResourceAccessException("indisponível"));
         assertThatThrownBy(() -> servico.atualizarStatus(id, false, UUID.randomUUID()))

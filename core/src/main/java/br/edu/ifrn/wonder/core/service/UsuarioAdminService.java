@@ -62,6 +62,11 @@ public class UsuarioAdminService {
         return executar(() -> {
             String token = keycloakClient.obterToken();
             Map<String, Object> usuario = buscarPessoa(token, id);
+            if (ativo && !Boolean.TRUE.equals(usuario.get("enabled"))) {
+                // Uma tentativa anterior de desativação pode ter falhado apenas no logout.
+                // Encerra sessões remanescentes antes de permitir um novo login.
+                keycloakClient.encerrarSessoes(token, id);
+            }
             usuario.put("enabled", ativo);
             keycloakClient.atualizarUsuario(token, id, usuario);
             if (!ativo) {
