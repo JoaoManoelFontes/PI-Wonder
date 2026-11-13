@@ -1,6 +1,7 @@
 package br.edu.ifrn.wonder.core.security;
 
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
@@ -16,7 +17,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.server.resource.introspection.OpaqueTokenIntrospector;
+import org.springframework.security.oauth2.server.resource.introspection.OAuth2IntrospectionException;
+import org.springframework.security.oauth2.server.resource.introspection.BadOpaqueTokenException;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit.jupiter.web.SpringJUnitWebConfig;
 import org.springframework.test.web.servlet.MockMvc;
@@ -32,6 +35,19 @@ class CorsSecurityTests {
     private WebApplicationContext contexto;
 
     private MockMvc mockMvc;
+
+    @Autowired
+    private OpaqueTokenIntrospector introspector;
+
+    @Test
+    void deveDistinguirTokenInativoDeKeycloakIndisponivel() throws Exception {
+        when(introspector.introspect("inativo")).thenThrow(new BadOpaqueTokenException("inactive"));
+        when(introspector.introspect("indisponivel")).thenThrow(new OAuth2IntrospectionException("unavailable"));
+        mockMvc.perform(get("/perfis/eu").header(HttpHeaders.AUTHORIZATION, "Bearer inativo"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/perfis/eu").header(HttpHeaders.AUTHORIZATION, "Bearer indisponivel"))
+                .andExpect(status().isServiceUnavailable());
+    }
 
     @BeforeEach
     void configurarMockMvc() {
@@ -74,8 +90,8 @@ class CorsSecurityTests {
     static class ConfiguracaoTeste {
 
         @Bean
-        JwtDecoder jwtDecoder() {
-            return mock(JwtDecoder.class);
+        OpaqueTokenIntrospector opaqueTokenIntrospector() {
+            return mock(OpaqueTokenIntrospector.class);
         }
     }
 }

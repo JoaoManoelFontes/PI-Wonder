@@ -137,7 +137,15 @@ O endpoint consolidado `PATCH /admin/prestadores/{id}/status` exige `ADMIN`. Qua
 
 A transação do PostgreSQL não inclui o Keycloak. Se a role for atribuída, mas sua resposta se perder ou o commit local falhar, o usuário poderá ter `PROVIDER` com o cadastro ainda pendente. Nesse caso, repita a aprovação: atribuir uma role já existente é seguro e permite concluir o cadastro. Não há remoção automática da role nem transação distribuída. O frontend deve renovar o access token para receber `PROVIDER` após a aprovação; o JWT já emitido não é alterado.
 
-O `compose.yaml` completo ainda não inclui Keycloak: nesse modo, disponibilize-o na rede do `core` e ajuste `KEYCLOAK_SERVER_URL` e `KEYCLOAK_ISSUER_URI` para o servidor utilizado.
+O `compose.yaml` completo ainda não inclui Keycloak: nesse modo, disponibilize-o na rede do `core` e ajuste `KEYCLOAK_SERVER_URL` para o servidor utilizado.
+
+### 6.2.2. Administração de usuários e introspecção
+
+O Core usa Spring Security com introspecção **sem cache** em cada requisição com Bearer token. A integração reutiliza o client confidencial `wonder-core` e as variáveis administrativas acima. `KEYCLOAK_SERVER_URL` deve ser acessível pelo processo do Core: use `http://localhost:8081` ao executar o Core no computador, ou o endereço interno adequado quando ele estiver em container. O endereço público de login do aplicativo é configurado separadamente. As antigas propriedades `resourceserver.jwt` não são usadas para autenticar requisições nesta configuração.
+
+As rotas `/admin/usuarios` permitem consultar, editar nome/e-mail e ativar/desativar contas, exigindo `ADMIN`. Desativar preserva os dados locais, bloqueia o login e encerra sessões no Keycloak. O aplicativo detecta o bloqueio na próxima chamada protegida e retorna ao login após a recusa do refresh; uma tela ociosa não é fechada por push. Reativar exige novo login. O cadastro permanece no autorregistro do Keycloak.
+
+Veja contratos, erros, configuração e estratégia de testes em [Administração de usuários](docs/Admin-Usuarios.md).
 
 ### 6.3. Criar as configurações de execução
 
