@@ -6,6 +6,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -72,6 +73,7 @@ class PrestadorFotoServiceTest {
     @Test
     void deveValidarStatusAntesDeLerOuArmazenarArquivo() {
         prestador.setStatus(StatusPrestador.PENDENTE);
+        prestador.setEnviadoEm(LocalDateTime.now());
         when(prestadorRepository.buscarPorIdComBloqueio(1L)).thenReturn(Optional.of(prestador));
         assertThatThrownBy(() -> service.atualizarFoto(1L, dono, null))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
