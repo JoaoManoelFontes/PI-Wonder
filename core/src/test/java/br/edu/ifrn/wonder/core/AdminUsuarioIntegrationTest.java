@@ -204,6 +204,28 @@ class AdminUsuarioIntegrationTest {
         }
     }
 
+    @Test
+    void clienteEPrestadorDevemEditarPropriaIdentidadeSemAlterarOutraContaOuPerfil() throws Exception {
+        for (String role : List.of("CUSTOMER", "PROVIDER")) {
+            UUID id = criarUsuario(role);
+            String token = login(id).get("access_token").toString();
+            mvc.perform(get("/perfis/eu").header("Authorization", "Bearer " + token)).andExpect(status().isOk());
+            var perfilId = perfis.findByKeycloakId(id).orElseThrow().getId();
+            String email = "editado-" + id + "@example.com";
+            mvc.perform(put("/perfis/eu/identidade").header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"nome\":\"Novo\",\"sobrenome\":\"Nome\",\"email\":\"" + email + "\"}"))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.email").value(email));
+            mvc.perform(get("/perfis/eu/identidade").header("Authorization", "Bearer " + token))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.nome").value("Novo"));
+            assertThat(perfis.findByKeycloakId(id).orElseThrow().getId()).isEqualTo(perfilId);
+            assertThat(keycloak.buscarUsuario(tokenServico, id).get("emailVerified")).isEqualTo(false);
+            assertThat(keycloak.buscarUsuario(tokenServico, administradorId).get("firstName")).isEqualTo("Teste");
+            mvc.perform(put("/admin/usuarios/{id}", administradorId).header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"nome\":\"Outro\",\"email\":\"outro@example.com\"}"))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
     private void alterarStatus(UUID id, boolean ativo) throws Exception {
         mvc.perform(patch("/admin/usuarios/{id}/status", id).header("Authorization", "Bearer " + tokenAdmin)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"ativo\":" + ativo + "}"))
