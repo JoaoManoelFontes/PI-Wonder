@@ -100,7 +100,7 @@ class CatalogoPrestadorFotoIntegrationTest {
         mockMvc.perform(multipart(rota(id)).file(foto("image/png", PNG))
                         .with(jwt().jwt(token -> token.subject(dono.toString()))))
                 .andExpect(sucesso())
-                .andExpect(jsonPath("$", aMapWithSize(14)))
+                .andExpect(jsonPath("$", aMapWithSize(15)))
                 .andExpect(jsonPath("$.id").value(id.intValue()))
                 .andExpect(jsonPath("$.fotoUrl").value(url(id)))
                 .andExpect(jsonPath("$.motivo_rejeicao").value("Motivo original"));
@@ -216,6 +216,7 @@ class CatalogoPrestadorFotoIntegrationTest {
     @Test
     void deveBloquearUploadDuranteAnalise() throws Exception {
         Prestador prestador = criarPrestador(StatusPrestador.PENDENTE);
+        prestador.setEnviadoEm(LocalDateTime.of(2026, 1, 1, 10, 0));
         mockMvc.perform(multipart(rota(prestador.getId())).file(foto("image/png", PNG))
                         .with(jwt().jwt(token -> token.subject(prestador.getPerfilUsuario().getKeycloakId().toString()))))
                 .andExpect(status().isConflict());

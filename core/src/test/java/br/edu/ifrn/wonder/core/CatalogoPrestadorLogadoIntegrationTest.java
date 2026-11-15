@@ -68,7 +68,7 @@ class CatalogoPrestadorLogadoIntegrationTest {
                             .param("prestador_id", outroPrestador.getId().toString())
                             .param("perfilUsuarioId", outroPerfil.getId().toString()))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$", aMapWithSize(14)))
+                    .andExpect(jsonPath("$", aMapWithSize(15)))
                     .andExpect(jsonPath("$.id").value(prestador.getId().intValue()))
                     .andExpect(jsonPath("$.perfilUsuarioId").value(perfil.getId().toString()))
                     .andExpect(jsonPath("$.nomeEstab").value("Meu estabelecimento"))

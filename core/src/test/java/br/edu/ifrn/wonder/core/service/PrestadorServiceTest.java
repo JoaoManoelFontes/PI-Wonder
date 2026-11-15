@@ -102,16 +102,14 @@ class PrestadorServiceTest {
     }
 
     @Test
-    void deveNotificarAdministradoresSomenteAposCommitDoCadastro() {
+    void naoDeveNotificarAdministradoresAntesDaConfirmacaoFinal() {
         configurarCadastro();
-        when(keycloakAdminService.listarEmailsAdministradores()).thenReturn(List.of("admin@example.com"));
 
-        prestadorService.cadastrarPrestador(KEYCLOAK_ID, request(), null);
+        Prestador prestador = prestadorService.cadastrarPrestador(KEYCLOAK_ID, request(), null);
 
+        assertThat(prestador.getEnviadoEm()).isNull();
+        assertThat(TransactionSynchronizationManager.getSynchronizations()).isEmpty();
         verifyNoInteractions(keycloakAdminService, rabbitProvider);
-        confirmarTransacao();
-        verify(rabbitProvider).sendProviderRequestCreated(new ProviderRequestCreated(List.of("admin@example.com"),
-                new DadosPrestador(42L, "Studio Wonder", "12345678900", "Natal", "RN")));
     }
 
     @Test
@@ -119,9 +117,7 @@ class PrestadorServiceTest {
         configurarCadastro();
         prestadorService.cadastrarPrestador(KEYCLOAK_ID, request(), null);
 
-        assertThat(TransactionSynchronizationManager.getSynchronizations()).hasSize(1);
-        TransactionSynchronizationManager.getSynchronizations().forEach(sincronizacao ->
-                sincronizacao.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
+        assertThat(TransactionSynchronizationManager.getSynchronizations()).isEmpty();
 
         verifyNoInteractions(keycloakAdminService, rabbitProvider);
     }
@@ -129,7 +125,6 @@ class PrestadorServiceTest {
     @Test
     void naoDevePublicarEventoSemDestinatarios() {
         configurarCadastro();
-        when(keycloakAdminService.listarEmailsAdministradores()).thenReturn(List.of());
         prestadorService.cadastrarPrestador(KEYCLOAK_ID, request(), null);
 
         confirmarTransacao();
@@ -139,10 +134,13 @@ class PrestadorServiceTest {
 
     @Test
     void devePreservarCadastroQuandoConsultaDosAdministradoresFalharAposCommit() {
-        configurarCadastro();
+        Prestador prestador = prestadorPendente();
+        prestador.setId(42L);
+        prestador.setEnviadoEm(null);
+        configurarEnvio(prestador);
         when(keycloakAdminService.listarEmailsAdministradores())
                 .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE));
-        Prestador prestador = prestadorService.cadastrarPrestador(KEYCLOAK_ID, request(), null);
+        prestadorService.enviarParaAprovacao(42L, KEYCLOAK_ID);
 
         confirmarTransacao();
 
@@ -152,11 +150,14 @@ class PrestadorServiceTest {
 
     @Test
     void devePreservarCadastroQuandoPublicacaoFalharAposCommit() {
-        configurarCadastro();
+        Prestador prestador = prestadorPendente();
+        prestador.setId(42L);
+        prestador.setEnviadoEm(null);
+        configurarEnvio(prestador);
         when(keycloakAdminService.listarEmailsAdministradores()).thenReturn(List.of("admin@example.com"));
         doThrow(new AmqpConnectException(new java.net.ConnectException("RabbitMQ indisponível")))
                 .when(rabbitProvider).sendProviderRequestCreated(any());
-        Prestador prestador = prestadorService.cadastrarPrestador(KEYCLOAK_ID, request(), null);
+        prestadorService.enviarParaAprovacao(42L, KEYCLOAK_ID);
 
         confirmarTransacao();
 
@@ -164,17 +165,13 @@ class PrestadorServiceTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = StatusPrestador.class, names = {"RASCUNHO", "REJEITADO"})
+    @EnumSource(value = StatusPrestador.class, names = {"PENDENTE", "RASCUNHO", "REJEITADO"})
     void deveNotificarNovoEnvioParaAprovacaoAposCommit(StatusPrestador status) {
         Prestador prestador = prestadorPendente();
         prestador.setId(42L);
         prestador.setStatus(status);
-        when(prestadorRepository.buscarPorIdComBloqueio(42L)).thenReturn(Optional.of(prestador));
-        Categoria categoria = Categoria.builder().status(StatusCategoria.ATIVA).build();
-        when(servicoRepository.findByPrestadorIdAndStatusOrderByNomeAsc(42L, StatusServico.ATIVO))
-                .thenReturn(List.of(Servico.builder().categoria(categoria).status(StatusServico.ATIVO).build()));
-        when(horarioAtendimentoRepository.findByPrestadorIdOrderByDiaSemanaAscHoraInicioAsc(42L))
-                .thenReturn(List.of(new HorarioAtendimento()));
+        if (status == StatusPrestador.PENDENTE) prestador.setEnviadoEm(null);
+        configurarEnvio(prestador);
         when(keycloakAdminService.listarEmailsAdministradores()).thenReturn(List.of("admin@example.com"));
 
         prestadorService.enviarParaAprovacao(42L, KEYCLOAK_ID);
@@ -319,7 +316,7 @@ class PrestadorServiceTest {
         assertThat(resultado.getNomeEstab()).isEqualTo("Studio Wonder");
         assertThat(resultado.getStatus()).isEqualTo(StatusPrestador.PENDENTE);
         assertThat(resultado.isAtivo()).isFalse();
-        assertThat(resultado.getEnviadoEm()).isNotNull();
+        assertThat(resultado.getEnviadoEm()).isNull();
         assertThat(resultado.getFotoUrl()).isNull();
         verifyNoInteractions(prestadorFotoService);
     }
@@ -359,7 +356,7 @@ class PrestadorServiceTest {
     void deveListarSolicitacoesPendentes() {
         Prestador prestador = prestadorPendente();
 
-        when(prestadorRepository.findByStatusOrderByEnviadoEmAsc(StatusPrestador.PENDENTE))
+        when(prestadorRepository.findByStatusAndEnviadoEmIsNotNullOrderByEnviadoEmAsc(StatusPrestador.PENDENTE))
                 .thenReturn(List.of(prestador));
 
         List<Prestador> resultado = prestadorService.listarSolicitacoesPendentes();
@@ -595,7 +592,17 @@ class PrestadorServiceTest {
                 .complemento("Sala 1")
                 .status(StatusPrestador.PENDENTE)
                 .ativo(false)
+                .enviadoEm(LocalDateTime.of(2026, 1, 1, 10, 0))
                 .build();
+    }
+
+    private void configurarEnvio(Prestador prestador) {
+        when(prestadorRepository.buscarPorIdComBloqueio(prestador.getId())).thenReturn(Optional.of(prestador));
+        Categoria categoria = Categoria.builder().status(StatusCategoria.ATIVA).build();
+        when(servicoRepository.findByPrestadorIdAndStatusOrderByNomeAsc(prestador.getId(), StatusServico.ATIVO))
+                .thenReturn(List.of(Servico.builder().categoria(categoria).status(StatusServico.ATIVO).build()));
+        when(horarioAtendimentoRepository.findByPrestadorIdOrderByDiaSemanaAscHoraInicioAsc(prestador.getId()))
+                .thenReturn(List.of(new HorarioAtendimento()));
     }
 
     private void permitirAprovacao(Prestador prestador) {
