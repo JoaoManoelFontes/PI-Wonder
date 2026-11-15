@@ -86,4 +86,8 @@ public class Prestador {
     protected void onUpdate() {
         atualizadoEm = Instant.now();
     }
+
+    public boolean isSolicitacaoEnviada() {
+        return status == StatusPrestador.PENDENTE && enviadoEm != null;
+    }
 }

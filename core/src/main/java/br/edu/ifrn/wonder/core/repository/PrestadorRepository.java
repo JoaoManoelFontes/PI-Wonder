@@ -63,5 +63,5 @@ public interface PrestadorRepository extends JpaRepository<Prestador, Long> {
     Optional<Prestador> findByIdAndStatusAndAtivoTrue(Long id, StatusPrestador status);
 
     @EntityGraph(attributePaths = "perfilUsuario")
-    List<Prestador> findByStatusOrderByEnviadoEmAsc(StatusPrestador status);
+    List<Prestador> findByStatusAndEnviadoEmIsNotNullOrderByEnviadoEmAsc(StatusPrestador status);
 }
