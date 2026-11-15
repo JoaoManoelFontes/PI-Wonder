@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.Locale;
 import java.util.UUID;
@@ -163,6 +164,18 @@ class CatalogoServicoFotoIntegrationTest {
             quantidade++;
         }
         assertThat(quantidade).isEqualTo(1);
+    }
+
+    @Test
+    void deveBloquearFotoDoServicoDepoisDoEnvioParaAnalise() throws Exception {
+        Prestador prestador = criarPrestador(StatusPrestador.PENDENTE);
+        prestador.setEnviadoEm(LocalDateTime.of(2026, 1, 1, 10, 0));
+        Servico servico = criarServico(prestador, StatusServico.ATIVO);
+
+        mockMvc.perform(multipart(rota(prestador.getId(), servico.getId())).file(foto("image/png", PNG))
+                        .with(jwt().jwt(token -> token.subject(
+                                prestador.getPerfilUsuario().getKeycloakId().toString()))))
+                .andExpect(status().isConflict());
     }
 
     @ParameterizedTest

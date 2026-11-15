@@ -18,7 +18,7 @@ Os sete endpoints de dados abaixo permitem consulta sem login. Envie os comandos
 
 ### Publicação pelo fluxo administrativo
 
-O cadastro em `POST /catalogo/prestadores` inicia como `pendente`, com `ativo = false`, e permanece oculto no catálogo. A aprovação em `PATCH /admin/prestadores/{prestador_id}/status` publica o prestador após a atribuição do papel `PROVIDER` no Keycloak. Rejeição, solicitação de correção ou falha nessa atribuição não publicam o cadastro.
+O cadastro em `POST /catalogo/prestadores` inicia como `pendente`, com `ativo = false` e `enviado_em = null`, e permanece oculto no catálogo. Enquanto a data de envio estiver vazia, o usuário ainda está montando a solicitação e ela não aparece para o administrador. A aprovação em `PATCH /admin/prestadores/{prestador_id}/status` publica o prestador após a atribuição do papel `PROVIDER` no Keycloak. Rejeição, solicitação de correção ou falha nessa atribuição não publicam o cadastro.
 
 A suspensão retira o prestador das listagens, inclusive com filtros, e suas consultas públicas de detalhe, serviços, horários, categorias e avaliações retornam `404`. A reativação o republica, preservando serviços, horários e os dados da aprovação original. O contrato administrativo está descrito em [Administração de prestadores](Admin-Prestadores.md).
 
@@ -520,7 +520,7 @@ O corpo usa `CadastroPrestadorRequest`: `nomeEstab`, `endereco`, `numero`, `bair
 }
 ```
 
-Retorna `201` com `PrestadorProprioResponse`. Esse contrato autenticado mantém os 13 campos públicos e acrescenta `motivo_rejeicao`, inicialmente nulo. O cadastro nasce `PENDENTE`, com `ativo = false` e data de envio registrada, preservando o fluxo existente. Identidade, status e publicação não podem ser escolhidos no payload. Retorna `401` sem login, `400` para dados inválidos e `409` se o usuário já possuir cadastro.
+Retorna `201` com `PrestadorProprioResponse`. Esse contrato autenticado acrescenta `enviado_em` e `motivo_rejeicao`, inicialmente nulos. O cadastro nasce `PENDENTE`, com `ativo = false`, mas somente será considerado enviado após a confirmação final. Identidade, status e publicação não podem ser escolhidos no payload. Retorna `401` sem login, `400` para dados inválidos e `409` se o usuário já possuir cadastro.
 
 `CadastroPrestadorIntegrationTest` verifica a rota autenticada, vínculo do dono, estado inicial, contrato da resposta, validação, duplicidade e substituição da rota antiga. As consultas GET públicas continuam sem exigir login.
 
@@ -553,7 +553,7 @@ Exemplo de corpo para alterar nome e cidade:
 
 A resposta `200` usa `PrestadorProprioResponse`, com os dados atualizados e o motivo da correção quando houver. Proprietário, status, campo `ativo`, foto e informações de aprovação/rejeição não são editáveis por esse DTO. Campos extras no JSON não alteram esses dados. A atualização não cria perfil nem dispara aprovação automática.
 
-Seguindo a regra do projeto antigo, cadastros `PENDENTE` não podem ser editados durante a análise. São editáveis pelo dono os cadastros `RASCUNHO`, `REJEITADO`, `ATIVO` e `SUSPENSO`, sem mudança automática de publicação.
+Cadastros `PENDENTE` com `enviado_em` preenchido não podem ser editados durante a análise. Enquanto `enviado_em` estiver vazio, os dados podem ser concluídos antes da confirmação final. Também são editáveis pelo dono os cadastros `RASCUNHO`, `REJEITADO`, `ATIVO` e `SUSPENSO`, sem mudança automática de publicação.
 
 | Situação | Retorno |
 | --- | --- |
@@ -561,7 +561,7 @@ Seguindo a regra do projeto antigo, cadastros `PENDENTE` não podem ser editados
 | Sem autenticação | `401`. |
 | Usuário diferente do dono, inclusive admin nesta rota | `403`. |
 | Cadastro inexistente | `404`. |
-| Cadastro pendente de análise | `409`. |
+| Cadastro pendente já enviado para análise | `409`. |
 | Campos inválidos, corpo inválido/ausente ou ID não numérico | `400`. |
 
 `CatalogoPrestadorEdicaoIntegrationTest` cobre persistência dos dados, edição parcial, propriedade, campos protegidos, limites de validação e estados do cadastro. As demais consultas públicas do catálogo permanecem sem login.
@@ -613,7 +613,7 @@ curl.exe -X POST "http://localhost:8080/catalogo/prestadores/$prestadorId/foto" 
 | Sem autenticação | `401`. |
 | Outro usuário, inclusive administrador | `403`. |
 | Prestador inexistente | `404`. |
-| Cadastro `PENDENTE` | `409`, seguindo a regra de edição durante análise. |
+| Cadastro `PENDENTE` com `enviado_em` preenchido | `409`, seguindo a regra de edição durante análise. |
 | Parte `file` ausente, arquivo vazio, formato ou assinatura incompatível | `400`. |
 | Arquivo acima de 5 MB | `413`. |
 | Corpo sem `multipart/form-data` | `415`. |
@@ -627,11 +627,11 @@ curl.exe -X POST "http://localhost:8080/catalogo/prestadores/$prestadorId/foto" 
 
 `POST /catalogo/prestadores/{prestador_id}/enviar-aprovacao` exige JWT do dono do cadastro e não precisa de corpo. A resposta `200` usa `PrestadorProprioResponse`, com `status = "pendente"`, `ativo = false` e `motivo_rejeicao = null`.
 
-O cadastro inicial em `POST /catalogo/prestadores` continua nascendo `PENDENTE`, conforme o fluxo atual. Esta rota permite enviar cadastros `RASCUNHO` e reenviar cadastros `REJEITADO` após correção; não permite novo envio de cadastro já pendente, ativo ou suspenso.
+O cadastro inicial em `POST /catalogo/prestadores` continua nascendo `PENDENTE`, mas com `enviado_em = null`. Esta rota confirma o primeiro envio desse cadastro e também permite enviar cadastros `RASCUNHO` ou reenviar cadastros `REJEITADO` após correção. Um cadastro `PENDENTE` com data de envio preenchida não pode ser enviado novamente.
 
 Antes do reenvio, o cadastro precisa ter nome e endereço completos, ao menos um serviço ativo ligado a uma categoria ativa e um horário de atendimento. O documento permanece opcional. A aprovação administrativa aplica a mesma conferência para impedir a publicação de uma solicitação incompleta.
 
-O envio registra uma nova data em `enviadoEm`, limpa o motivo de rejeição anterior e mantém o cadastro fora do catálogo público. A decisão continua nas rotas administrativas existentes. Não há aprovação automática nem alteração do proprietário.
+O envio registra uma nova data em `enviadoEm`, limpa o motivo de rejeição anterior, notifica os administradores e mantém o cadastro fora do catálogo público. Somente a partir desse momento ele aparece na fila administrativa. A decisão continua nas rotas administrativas existentes. Não há aprovação automática nem alteração do proprietário.
 
 | Situação | Retorno |
 | --- | --- |
@@ -639,7 +639,7 @@ O envio registra uma nova data em `enviadoEm`, limpa o motivo de rejeição ante
 | Sem autenticação | `401`. |
 | Usuário diferente do dono, inclusive admin nesta rota | `403`. |
 | Cadastro inexistente | `404`. |
-| Cadastro pendente, ativo ou suspenso; envio repetido | `409`. |
+| Cadastro pendente já enviado, ativo ou suspenso; envio repetido | `409`. |
 | Requisitos incompletos ou ID inválido | `400`. |
 
 Exemplo de requisição autenticada:
@@ -671,7 +671,7 @@ Conforme a decisão adotada para o projeto novo, as categorias do prestador são
 
 ## Gestão de serviços do próprio prestador — AUTH-LW-006
 
-As rotas abaixo exigem JWT do dono do prestador. Também permanecem disponíveis no cadastro `PENDENTE` para que serviços sejam incluídos e revisados antes da decisão administrativa. Ter papel de admin não concede permissão para editar o cadastro de outro usuário por essas rotas.
+As rotas abaixo exigem JWT do dono do prestador. Permanecem disponíveis no cadastro `PENDENTE` somente enquanto `enviado_em` estiver vazio, para que serviços sejam incluídos e revisados antes da confirmação final. Depois do envio, retornam `409` até a decisão administrativa. Ter papel de admin não concede permissão para editar o cadastro de outro usuário por essas rotas.
 
 | Método e rota | Sucesso |
 | --- | --- |
@@ -723,7 +723,7 @@ Inativar um serviço o remove das consultas públicas de serviços ativos e da d
 
 Usa a mesma validação da [foto do prestador](#foto-do-prestador): JPEG, PNG ou WebP até 5 MB (5.242.880 bytes), com conferência do tipo MIME e assinatura inicial. O arquivo substitui o objeto `prestadores/{prestador_id}/servicos/{servico_id}/foto` no MinIO. A URL é persistida no serviço. As fotos do perfil, do estabelecimento e de outros serviços permanecem independentes.
 
-O upload mantém nome, preço, duração, categoria e status do serviço. Serviços inativos podem receber foto pelo dono, conforme a regra de edição existente, sem serem reativados. Durante a montagem da solicitação pendente, o dono também pode enviar a imagem dos serviços cadastrados. Administradores não podem enviar foto em nome de outro dono nesta rota.
+O upload mantém nome, preço, duração, categoria e status do serviço. Serviços inativos podem receber foto pelo dono, conforme a regra de edição existente, sem serem reativados. Durante a montagem da solicitação pendente ainda não enviada, o dono também pode enviar a imagem dos serviços cadastrados. Após a confirmação final, o upload retorna `409`. Administradores não podem enviar foto em nome de outro dono nesta rota.
 
 ```powershell
 $prestadorId = 1
@@ -748,7 +748,7 @@ curl.exe -X POST "http://localhost:8080/catalogo/prestadores/$prestadorId/servic
 
 ## Gestão de horários do próprio prestador — AUTH-LW-007
 
-As duas rotas exigem JWT do dono. O prestador pode cadastrar e revisar horários durante a montagem da solicitação pendente e também após uma devolução para correção. O papel de admin não permite modificar o horário de outro usuário por essas rotas.
+As duas rotas exigem JWT do dono. O prestador pode cadastrar e revisar horários durante a montagem da solicitação pendente, enquanto `enviado_em` estiver vazio, e também após uma devolução para correção. Depois da confirmação final, alterações retornam `409`. O papel de admin não permite modificar o horário de outro usuário por essas rotas.
 
 | Método e rota | Sucesso |
 | --- | --- |

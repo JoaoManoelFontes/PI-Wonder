@@ -20,6 +20,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.util.Locale;
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Arrays;
 import java.util.Map;
@@ -299,6 +300,8 @@ class AdminPrestadorIntegrationTest {
                 .andExpect(jsonPath("$.status").value("pendente"))
                 .andExpect(jsonPath("$.ativo").value(false));
         prestadorCriado = prestadorRepository.findByPerfilUsuarioKeycloakId(usuarioId).orElseThrow();
+        prestadorCriado.setEnviadoEm(LocalDateTime.now());
+        prestadorCriado = prestadorRepository.saveAndFlush(prestadorCriado);
         return prestadorCriado;
     }
 
@@ -449,11 +452,15 @@ class AdminPrestadorIntegrationTest {
 
     private Prestador criarPrestador(UUID usuarioId, StatusPrestador statusInicial) {
         PerfilUsuario perfil = perfilUsuarioRepository.save(new PerfilUsuario(usuarioId));
-        prestadorCriado = prestadorRepository.saveAndFlush(Prestador.builder()
+        var prestador = Prestador.builder()
                 .perfilUsuario(perfil).nomeEstab("Studio aprovação")
                 .endereco("Rua das Flores").numero("100").bairro("Centro")
                 .cidade("Natal").estado("RN")
-                .status(statusInicial).ativo(false).build());
+                .status(statusInicial).ativo(false);
+        if (statusInicial == StatusPrestador.PENDENTE) {
+            prestador.enviadoEm(LocalDateTime.now());
+        }
+        prestadorCriado = prestadorRepository.saveAndFlush(prestador.build());
         categoriaCriada = categoriaRepository.saveAndFlush(Categoria.builder()
                 .nome("Categoria aprovação " + UUID.randomUUID()).build());
         servicoRepository.saveAndFlush(Servico.builder()

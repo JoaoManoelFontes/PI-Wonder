@@ -96,6 +96,18 @@ class ServicoPrestadorIntegrationTest {
     }
 
     @Test
+    void deveBloquearAlteracaoDeServicoDepoisDoEnvioParaAnalise() throws Exception {
+        Prestador prestador = criarPrestador(StatusPrestador.PENDENTE);
+        prestador.setEnviadoEm(LocalDateTime.of(2026, 1, 1, 10, 0));
+        Categoria categoria = criarCategoria();
+
+        mockMvc.perform(autenticada("POST", prestador, 0L)
+                        .content(jsonMapper.writeValueAsString(Map.of("nome", "Corte", "preco", 30,
+                                "duracao_min", 30, "categoria_id", categoria.getId()))))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
     void deveRetornar404QuandoUsuarioNaoPossuiCadastroDePrestador() throws Exception {
         mockMvc.perform(get("/catalogo/prestadores/me/servicos")
                         .with(jwt().jwt(token -> token.subject(UUID.randomUUID().toString()))))

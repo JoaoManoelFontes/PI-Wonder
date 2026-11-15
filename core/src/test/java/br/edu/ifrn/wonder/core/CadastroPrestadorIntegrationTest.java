@@ -54,7 +54,7 @@ class CadastroPrestadorIntegrationTest {
                         .param("fotoUrl", "https://externa.test/foto.png").param("status", "ATIVO")
                         .param("ativo", "true").param("perfilUsuarioId", outroPerfil.getId().toString()))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$", aMapWithSize(14)))
+                .andExpect(jsonPath("$", aMapWithSize(15)))
                 .andExpect(jsonPath("$.id").isNumber())
                 .andExpect(jsonPath("$.nomeEstab").value("Studio cadastro"))
                 .andExpect(jsonPath("$.documento").value("12345678900"))
@@ -67,6 +67,7 @@ class CadastroPrestadorIntegrationTest {
                 .andExpect(jsonPath("$.status").value("pendente"))
                 .andExpect(jsonPath("$.ativo").value(false))
                 .andExpect(jsonPath("$.fotoUrl").isEmpty())
+                .andExpect(jsonPath("$.enviado_em").isEmpty())
                 .andExpect(jsonPath("$.motivo_rejeicao").isEmpty());
 
         PerfilUsuario perfil = perfilUsuarioRepository.findByKeycloakId(keycloakId).orElseThrow();
@@ -74,7 +75,7 @@ class CadastroPrestadorIntegrationTest {
         assertThat(prestador.getPerfilUsuario().getId()).isNotEqualTo(outroPerfil.getId());
         assertThat(prestador.getStatus()).isEqualTo(StatusPrestador.PENDENTE);
         assertThat(prestador.isAtivo()).isFalse();
-        assertThat(prestador.getEnviadoEm()).isNotNull();
+        assertThat(prestador.getEnviadoEm()).isNull();
         assertThat(prestador.getAprovadoEm()).isNull();
         assertThat(prestador.getAprovadoPor()).isNull();
 

@@ -102,6 +102,16 @@ class HorarioPrestadorIntegrationTest {
         mockMvc.perform(autenticada("DELETE", prestador, horarioId)).andExpect(status().isNotFound());
     }
 
+    @Test
+    void deveBloquearAlteracaoDeHorarioDepoisDoEnvioParaAnalise() throws Exception {
+        Prestador prestador = criarPrestador(StatusPrestador.PENDENTE);
+        prestador.setEnviadoEm(LocalDateTime.of(2026, 1, 1, 10, 0));
+
+        mockMvc.perform(autenticada("POST", prestador, 0L)
+                        .content("{\"dia_semana\":1,\"hora_inicio\":\"09:00\",\"hora_fim\":\"12:00\"}"))
+                .andExpect(status().isConflict());
+    }
+
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 3, 4, 5, 6, 7})
     void deveAceitarTodosOsDiasDaSemanaEPrecisaoDeSegundos(int diaSemana) throws Exception {

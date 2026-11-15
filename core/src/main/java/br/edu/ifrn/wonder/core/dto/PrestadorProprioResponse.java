@@ -1,5 +1,6 @@
 package br.edu.ifrn.wonder.core.dto;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -21,6 +22,7 @@ public record PrestadorProprioResponse(
         String status,
         boolean ativo,
         String fotoUrl,
+        @JsonProperty("enviado_em") LocalDateTime enviadoEm,
         @JsonProperty("motivo_rejeicao") String motivoRejeicao
 ) {
 
@@ -39,6 +41,7 @@ public record PrestadorProprioResponse(
                 formatStatus(prestador.getStatus()),
                 prestador.isAtivo(),
                 prestador.getFotoUrl(),
+                prestador.getEnviadoEm(),
                 prestador.getMotivoRejeicao()
         );
     }

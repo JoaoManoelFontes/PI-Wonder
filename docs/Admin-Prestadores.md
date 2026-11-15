@@ -4,9 +4,9 @@ As rotas administrativas exigem JWT com `ROLE_ADMIN`. O contrato usa nomes em `s
 
 ## Pendências
 
-`GET /admin/prestadores/pendentes` lista somente cadastros com status `pendente`, ordenados pela data de envio. A resposta inclui a identificação do usuário, dados básicos do estabelecimento e informações da análise.
+`GET /admin/prestadores/pendentes` lista somente cadastros com status `pendente` e `enviado_em` preenchido, ordenados pela data de envio. Cadastros ainda em montagem permanecem fora da fila. A resposta inclui a identificação do usuário, dados básicos do estabelecimento e informações da análise.
 
-`GET /admin/prestadores/{prestador_id}` detalha um cadastro em qualquer status. Além dos dados do prestador, a resposta contém as listas `servicos` e `horarios`, necessárias para a análise administrativa.
+`GET /admin/prestadores/{prestador_id}` detalha um cadastro em qualquer status, exceto uma solicitação pendente ainda não enviada. Além dos dados do prestador, a resposta contém as listas `servicos` e `horarios`, necessárias para a análise administrativa.
 
 ## Alteração de status
 

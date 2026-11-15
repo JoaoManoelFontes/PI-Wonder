@@ -71,7 +71,7 @@ class CatalogoPrestadorEdicaoIntegrationTest {
                                  "cidade":"Parnamirim","estado":"RN","complemento":"Sala 2"}
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", aMapWithSize(14)))
+                .andExpect(jsonPath("$", aMapWithSize(15)))
                 .andExpect(jsonPath("$.id").value(prestadorId.intValue()))
                 .andExpect(jsonPath("$.perfilUsuarioId").value(perfilId.toString()))
                 .andExpect(jsonPath("$.nomeEstab").value("Studio atualizado"))

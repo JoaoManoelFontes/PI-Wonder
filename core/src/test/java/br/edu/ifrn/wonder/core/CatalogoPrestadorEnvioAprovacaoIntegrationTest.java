@@ -78,6 +78,7 @@ class CatalogoPrestadorEnvioAprovacaoIntegrationTest {
                 .andExpect(jsonPath("$.nomeEstab").value("Studio envio"))
                 .andExpect(jsonPath("$.status").value("pendente"))
                 .andExpect(jsonPath("$.ativo").value(false))
+                .andExpect(jsonPath("$.enviado_em").isNotEmpty())
                 .andExpect(jsonPath("$.motivo_rejeicao").isEmpty());
 
         prestadorRepository.flush();
@@ -102,6 +103,33 @@ class CatalogoPrestadorEnvioAprovacaoIntegrationTest {
         mockMvc.perform(post("/catalogo/prestadores/{id}/enviar-aprovacao", prestadorId)
                         .with(jwt().jwt(token -> token.subject(keycloakId.toString()))))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    void deveFinalizarCadastroPendenteAindaNaoEnviado() throws Exception {
+        Prestador prestador = criarPrestador(StatusPrestador.PENDENTE);
+        prestador.setEnviadoEm(null);
+        prestadorRepository.flush();
+
+        UUID adminId = UUID.randomUUID();
+        mockMvc.perform(get("/admin/prestadores/pendentes")
+                        .with(jwt().jwt(token -> token.subject(adminId.toString()))
+                                .authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].id").value(org.hamcrest.Matchers.not(hasItem(prestador.getId().intValue()))));
+
+        mockMvc.perform(post("/catalogo/prestadores/{id}/enviar-aprovacao", prestador.getId())
+                        .with(jwt().jwt(token -> token.subject(prestador.getPerfilUsuario().getKeycloakId().toString()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("pendente"))
+                .andExpect(jsonPath("$.enviado_em").isNotEmpty());
+
+        assertThat(prestador.getEnviadoEm()).isNotNull();
+        mockMvc.perform(get("/admin/prestadores/pendentes")
+                        .with(jwt().jwt(token -> token.subject(adminId.toString()))
+                                .authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].id").value(hasItem(prestador.getId().intValue())));
     }
 
     @ParameterizedTest

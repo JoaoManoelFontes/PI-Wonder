@@ -80,14 +80,12 @@ public class PrestadorService {
                 .complemento(request.complemento())
                 .status(StatusPrestador.PENDENTE)
                 .ativo(false)
-                .enviadoEm(LocalDateTime.now())
                 .build();
 
         prestador = prestadorRepository.save(prestador);
         if (fotoInformada) {
             prestadorFotoService.armazenarFoto(prestador, arquivo);
         }
-        notificarSolicitacaoAposCommit(prestador);
         return prestador;
     }
 
@@ -122,7 +120,7 @@ public class PrestadorService {
         if (!prestador.getPerfilUsuario().getKeycloakId().equals(keycloakId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sem permissão para modificar este prestador");
         }
-        if (prestador.getStatus() == StatusPrestador.PENDENTE) {
+        if (prestador.isSolicitacaoEnviada()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cadastro pendente de análise não pode ser editado");
         }
 
@@ -161,7 +159,11 @@ public class PrestadorService {
         if (!prestador.getPerfilUsuario().getKeycloakId().equals(keycloakId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sem permissão para enviar este cadastro");
         }
-        if (prestador.getStatus() != StatusPrestador.RASCUNHO && prestador.getStatus() != StatusPrestador.REJEITADO) {
+        boolean pendenteAindaNaoEnviado = prestador.getStatus() == StatusPrestador.PENDENTE
+                && prestador.getEnviadoEm() == null;
+        if (!pendenteAindaNaoEnviado
+                && prestador.getStatus() != StatusPrestador.RASCUNHO
+                && prestador.getStatus() != StatusPrestador.REJEITADO) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cadastro não pode ser enviado neste status");
         }
 
@@ -252,13 +254,17 @@ public class PrestadorService {
 
     @Transactional(readOnly = true)
     public List<Prestador> listarSolicitacoesPendentes() {
-        return prestadorRepository.findByStatusOrderByEnviadoEmAsc(StatusPrestador.PENDENTE);
+        return prestadorRepository.findByStatusAndEnviadoEmIsNotNullOrderByEnviadoEmAsc(StatusPrestador.PENDENTE);
     }
 
     @Transactional(readOnly = true)
     public Prestador detalharPrestadorAdmin(Long id) {
-        return prestadorRepository.findById(id)
+        Prestador prestador = prestadorRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Prestador não encontrado"));
+        if (prestador.getStatus() == StatusPrestador.PENDENTE && prestador.getEnviadoEm() == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Solicitação ainda não enviada para análise");
+        }
+        return prestador;
     }
 
     @Transactional(readOnly = true)
@@ -277,6 +283,9 @@ public class PrestadorService {
             AtualizacaoStatusPrestadorRequest request,
             UUID adminId) {
         Prestador prestador = buscarPrestadorParaAlteracao(id);
+        if (prestador.getStatus() == StatusPrestador.PENDENTE && prestador.getEnviadoEm() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Solicitação ainda não enviada para análise");
+        }
         StatusPrestador statusAnterior = prestador.getStatus();
         StatusPrestador novoStatus = converterStatusAdmin(request.status());
         validarTransicaoAdmin(prestador.getStatus(), novoStatus);
