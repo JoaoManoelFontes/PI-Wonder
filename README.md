@@ -251,6 +251,8 @@ Administração de categorias: [consulta, cadastro, edição, alteração de sta
 
 Administração de prestadores: [consulta de pendências, detalhe e alteração de status protegidos por role ADMIN](docs/Admin-Prestadores.md), incluindo aprovação, correção, rejeição, suspensão, reativação e bloqueio de autoaprovação.
 
+Notificações no aplicativo: [eventos assíncronos de agendamento, lembretes, consulta autenticada e leitura](docs/Notificacoes-App.md).
+
 Disponibilidade: [exemplos das consultas de dias e horários livres](docs/Disponibilidade-Exemplos.md), com acesso sem login, parâmetros, respostas do seed, conflitos, listas vazias e critérios de validação (LW-015 e JN-015).
 
 Agendamentos: [criação autenticada e listagem por cliente, prestador ou administrador](docs/Agendamentos.md), com filtro por data, validação da grade de atendimento e proteção contra reservas sobrepostas.
