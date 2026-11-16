@@ -1,5 +1,7 @@
 package br.edu.ifrn.wonder.core.service;
 
+import java.util.List;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -23,17 +25,27 @@ public class UsuarioAdminService {
     private final KeycloakClient keycloakClient;
 
     public UsuariosAdminPaginaResponse listar(String busca, int inicio, int limite) {
-        if (inicio < 0 || limite < 1 || limite > 100 || busca.length() > 255) {
+        return listar(busca, null, inicio, limite);
+    }
+
+    public UsuariosAdminPaginaResponse listar(String busca, String papel, int inicio, int limite) {
+        if (inicio < 0 || limite < 1 || limite > 100 || busca.length() > 255
+                || (papel != null && !List.of("CUSTOMER", "PROVIDER", "ADMIN").contains(papel))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Paginação ou busca inválida");
         }
-        return executar(() -> {
+        try {
             String token = keycloakClient.obterToken();
-            var usuarios = keycloakClient.listarUsuarios(token, busca.trim(), inicio, limite + 1).stream()
-                    .filter(usuario -> usuario.get("serviceAccountClientId") == null)
-                    .map(UsuarioAdminResponse::from).toList();
-            return new UsuariosAdminPaginaResponse(usuarios.stream().limit(limite).toList(), inicio, limite,
-                    usuarios.size() > limite);
-        });
+            var usuarios = keycloakClient.listarPessoas(token, busca.trim(), papel).stream()
+                    .map(UsuarioAdminResponse::from)
+                    .sorted(Comparator.comparing(UsuarioAdminResponse::username)
+                            .thenComparing(usuario -> usuario.id().toString()))
+                    .toList();
+            return new UsuariosAdminPaginaResponse(usuarios.stream().skip(inicio).limit(limite).toList(),
+                    inicio, limite, (long) inicio + limite < usuarios.size(), usuarios.size());
+        } catch (RestClientException | IllegalStateException excecao) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Não foi possível consultar os usuários no Keycloak", excecao);
+        }
     }
 
     public UsuarioAdminResponse detalhar(UUID id) {

@@ -17,6 +17,18 @@ import java.util.UUID;
 
 public interface AgendamentoRepository extends JpaRepository<Agendamento, Long> {
 
+    @Query(value = """
+            SELECT CAST(inicio AS DATE) AS data, status, COUNT(*) AS quantidade
+            FROM agendamentos
+            WHERE inicio >= :inicio AND inicio < :fimExclusivo
+            GROUP BY CAST(inicio AS DATE), status
+            """, nativeQuery = true)
+    List<AgendamentoContagemDiaria> contarPorDiaEStatus(
+            @Param("inicio") LocalDateTime inicio, @Param("fimExclusivo") LocalDateTime fimExclusivo);
+
+    long countByStatusAndInicioGreaterThanEqualAndInicioLessThan(
+            StatusAgendamento status, LocalDateTime inicio, LocalDateTime fim);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT agendamento FROM Agendamento agendamento WHERE agendamento.id = :id")
     Optional<Agendamento> buscarPorIdComBloqueio(@Param("id") Long id);

@@ -33,6 +33,28 @@ class KeycloakAdminServiceTest {
     @InjectMocks
     private KeycloakAdminService keycloakAdminService;
 
+    @ParameterizedTest
+    @ValueSource(longs = {0, 1248})
+    void deveRetornarContagemDoClienteInclusiveZero(long total) {
+        when(keycloakClient.contarUsuarios()).thenReturn(total);
+
+        assertThat(keycloakAdminService.contarUsuarios()).isEqualTo(total);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void deveTraduzirFalhasDaContagemParaIndisponibilidade(boolean falhaDeComunicacao) {
+        RuntimeException falha = falhaDeComunicacao ? new ResourceAccessException("Timeout")
+                : new IllegalStateException("Contagem inválida ou configuração ausente");
+        when(keycloakClient.contarUsuarios()).thenThrow(falha);
+
+        assertThatThrownBy(keycloakAdminService::contarUsuarios)
+                .isInstanceOfSatisfying(ResponseStatusException.class, excecao -> {
+                    assertThat(excecao.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+                    assertThat(excecao.getCause()).isSameAs(falha);
+                });
+    }
+
     @Test
     void deveDelegarBuscaDeEmailAoCliente() {
         UUID keycloakId = UUID.randomUUID();

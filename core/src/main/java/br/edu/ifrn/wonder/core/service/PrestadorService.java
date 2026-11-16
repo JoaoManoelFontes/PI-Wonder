@@ -1,6 +1,13 @@
 package br.edu.ifrn.wonder.core.service;
 
 import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.DateTimeException;
+import java.util.Locale;
+import java.util.HashMap;
+import java.util.Objects;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -11,9 +18,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import br.edu.ifrn.wonder.core.client.KeycloakClient;
+import br.edu.ifrn.wonder.core.dto.PrestadorAdminItemResponse;
+import br.edu.ifrn.wonder.core.dto.PrestadoresAdminPaginaResponse;
 import br.edu.ifrn.wonder.core.domain.PerfilUsuario;
 import br.edu.ifrn.wonder.core.domain.Categoria;
 import br.edu.ifrn.wonder.core.domain.HorarioAtendimento;
@@ -53,6 +65,76 @@ public class PrestadorService {
     private final KeycloakAdminService keycloakAdminService;
     private final PrestadorFotoService prestadorFotoService;
     private final RabbitProvider rabbitProvider;
+    private final KeycloakClient keycloakClient;
+
+    public PrestadoresAdminPaginaResponse listarAdmin(
+            String busca, String status, String dataInicio, String dataFim, String ordem, int inicio, int limite) {
+        if (inicio < 0 || limite < 1 || limite > 100 || busca.length() > 255
+                || !List.of("mais_recentes", "mais_antigos").contains(ordem)
+                || (status != null && !List.of("rascunho", "pendente", "ativo", "rejeitado", "suspenso").contains(status))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Filtros ou paginação inválidos");
+        }
+        Instant de = null;
+        Instant ate = null;
+        if (dataInicio != null || dataFim != null) {
+            try {
+                if (dataInicio == null || dataFim == null
+                        || !dataInicio.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}")
+                        || !dataFim.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}")) {
+                    throw new DateTimeException("Informe ambas as datas em YYYY-MM-DD");
+                }
+                var primeiroDia = LocalDate.parse(dataInicio);
+                var ultimoDia = LocalDate.parse(dataFim);
+                if (primeiroDia.isAfter(ultimoDia)) {
+                    throw new DateTimeException("Intervalo invertido");
+                }
+                var zona = ZoneId.of("America/Sao_Paulo");
+                de = primeiroDia.atStartOfDay(zona).toInstant();
+                ate = ultimoDia.plusDays(1).atStartOfDay(zona).toInstant();
+            } catch (DateTimeException | ArithmeticException excecao) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Intervalo de datas inválido", excecao);
+            }
+        }
+        try {
+            String texto = busca.trim();
+            // Reutilizado na busca e na resolução dos responsáveis; nenhuma chamada HTTP ocorre na transação do repositório.
+            String token = texto.isEmpty() ? null : keycloakClient.obterToken();
+            List<UUID> responsaveis = texto.isEmpty() ? List.of()
+                    : keycloakClient.listarPessoas(token, texto, null).stream()
+                            .map(usuario -> UUID.fromString((String) usuario.get("id"))).distinct().toList();
+            var pagina = prestadorRepository.buscarAdministrativos(texto, responsaveis,
+                    status == null ? null : StatusPrestador.valueOf(status.toUpperCase(Locale.ROOT)),
+                    de, ate, ordem.equals("mais_antigos"), inicio, limite);
+            if (token == null && !pagina.isEmpty()) {
+                token = keycloakClient.obterToken();
+            }
+            var nomes = new HashMap<UUID, String>();
+            List<PrestadorAdminItemResponse> itens = new ArrayList<>();
+            for (Prestador prestador : pagina) {
+                UUID usuarioId = prestador.getPerfilUsuario().getKeycloakId();
+                if (!nomes.containsKey(usuarioId)) {
+                    nomes.put(usuarioId, buscarNomeResponsavel(token, usuarioId));
+                }
+                itens.add(PrestadorAdminItemResponse.from(prestador, nomes.get(usuarioId)));
+            }
+            return new PrestadoresAdminPaginaResponse(itens, inicio, limite,
+                    (long) inicio + limite < pagina.getTotalElements(), pagina.getTotalElements());
+        } catch (RestClientException | IllegalStateException excecao) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Não foi possível consultar os responsáveis no Keycloak", excecao);
+        }
+    }
+
+    private String buscarNomeResponsavel(String token, UUID usuarioId) {
+        try {
+            var usuario = keycloakClient.buscarUsuario(token, usuarioId);
+            String nome = (Objects.toString(usuario.get("firstName"), "") + " "
+                    + Objects.toString(usuario.get("lastName"), "")).trim().replaceAll("\\s+", " ");
+            return nome.isEmpty() ? (String) usuario.get("username") : nome;
+        } catch (HttpClientErrorException.NotFound excecao) {
+            return null;
+        }
+    }
 
     @Transactional
     public Prestador cadastrarPrestador(UUID keycloakId, CadastroPrestadorRequest request, MultipartFile arquivo) {

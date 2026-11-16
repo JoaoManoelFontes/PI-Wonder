@@ -31,9 +31,10 @@ public class AdminUsuarioController {
 
     @GetMapping
     UsuariosAdminPaginaResponse listar(@RequestParam(name = "busca", defaultValue = "") String busca,
+            @RequestParam(name = "papel", required = false) String papel,
             @RequestParam(name = "inicio", defaultValue = "0") int inicio,
             @RequestParam(name = "limite", defaultValue = "20") int limite) {
-        return usuarioAdminService.listar(busca, inicio, limite);
+        return usuarioAdminService.listar(busca, papel, inicio, limite);
     }
 
     @GetMapping("/{id}")

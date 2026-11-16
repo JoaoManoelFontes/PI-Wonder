@@ -6,12 +6,33 @@ Todas as rotas abaixo exigem a realm role `ADMIN`. `id` é o UUID do usuário no
 
 | Método e rota | Operação |
 |---|---|
-| `GET /admin/usuarios?busca=&inicio=0&limite=20` | Busca por nome, username ou e-mail; início >= 0, limite entre 1 e 100 |
+| `GET /admin/usuarios?busca=&papel=CUSTOMER&inicio=0&limite=20` | Busca por nome, username ou e-mail, combinada com papel; início >= 0, limite entre 1 e 100 |
 | `GET /admin/usuarios/{id}` | Consulta a identidade atual |
 | `PUT /admin/usuarios/{id}` | Atualiza `nome`, `sobrenome` e `email` |
 | `PATCH /admin/usuarios/{id}/status` | Recebe `{"ativo":false}` ou `{"ativo":true}` |
 
-A listagem retorna `usuarios`, `inicio`, `limite` e `temProxima`. Cada usuário contém `id`, `username`, `nome`, `sobrenome`, `email` e `ativo`. Contas de serviço não podem ser gerenciadas por estas rotas.
+A listagem retorna `usuarios`, `inicio`, `limite`, `temProxima` e `total`. Cada usuário contém `id`, `username`, `nome`, `sobrenome`, `email` e `ativo`. Contas de serviço não podem ser gerenciadas por estas rotas.
+
+`busca` tem espaços externos removidos e aceita até 255 caracteres, mantendo a pesquisa do Keycloak. `papel` aceita `CUSTOMER`, `PROVIDER` ou `ADMIN`; omitir inclui todos. Papel vazio ou diferente desses valores retorna `400`. Busca e papel usam AND. São consideradas associações diretas e herdadas de papéis compostos, incluindo o CUSTOMER padrão. Contas com múltiplos papéis aparecem uma única vez. Contas desativadas e contas sem perfil local também são incluídas.
+
+`inicio` é um deslocamento exato, não um número de página, com padrão 0. `limite` tem padrão 20 e varia de 1 a 100. `total` conta todas as contas após os filtros e a exclusão de service accounts, antes da paginação. A ordem é username e UUID crescentes. Início além do fim mantém o total e retorna lista vazia com `temProxima=false`; nenhuma correspondência retorna total zero.
+
+Exemplo de `GET /admin/usuarios?busca=Ana&papel=CUSTOMER&inicio=0&limite=20`:
+
+```json
+{
+  "usuarios": [{
+    "id": "11111111-1111-1111-1111-111111111111",
+    "username": "ana", "nome": "Ana", "sobrenome": "Silva",
+    "email": "ana@example.com", "ativo": false
+  }],
+  "inicio": 0, "limite": 20, "temProxima": false, "total": 1
+}
+```
+
+Para calcular o total corretamente, o MVP lê todos os candidatos do Keycloak em lotes de 100. Com filtro de papel, consulta também os papéis do realm, suas composições e todos os lotes de membros dos papéis que concedem o papel solicitado, cruzando os IDs antes do recorte. O custo cresce com o conjunto pesquisado, mesmo para páginas pequenas; não há cache ou cópia local da identidade. Um token de serviço é reutilizado por requisição. Falha em qualquer lote ou consulta necessária retorna `503`, sem lista parcial nem total artificial. Sem autenticação retorna `401`; sem ADMIN, `403`.
+
+Esta entrega implementa somente o backend das listagens, sem frontend ou exportação CSV.
 
 Na edição, nome e e-mail são obrigatórios; sobrenome pode ficar vazio. Username, atributos e demais informações existentes são preservados. A troca do e-mail remove sua marcação de verificado. E-mail duplicado retorna `409`; dados inválidos, `400`; usuário inexistente, `404`. Não é permitido desativar a própria conta (`409`).
 

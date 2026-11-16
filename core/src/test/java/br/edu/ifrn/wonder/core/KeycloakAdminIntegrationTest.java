@@ -66,6 +66,83 @@ class KeycloakAdminIntegrationTest {
     }
 
     @Test
+    void deveVerificarBuscaEMembrosPaginadosComRepresentacaoCompleta() {
+        String token = keycloakClient.obterToken();
+        RestClient cliente = RestClient.create(enderecoKeycloak());
+        List<UUID> criados = new ArrayList<>();
+        String prefixo = "listagem-" + UUID.randomUUID();
+        try {
+            for (int indice = 0; indice < 125; indice++) {
+                var resposta = cliente.post().uri("/admin/realms/wonder/users")
+                        .headers(cabecalhos -> cabecalhos.setBearerAuth(token))
+                        .body(Map.of("username", prefixo + String.format("-%03d", indice),
+                                "firstName", "Ana", "email", prefixo + indice + "@example.com",
+                                "enabled", indice != 124)).retrieve().toBodilessEntity();
+                String localizacao = resposta.getHeaders().getLocation().toString();
+                UUID id = UUID.fromString(localizacao.substring(localizacao.lastIndexOf('/') + 1));
+                criados.add(id);
+                keycloakClient.adicionarRole(id, token, keycloakClient.buscarRole(token, "PROVIDER"));
+            }
+            assertThat(keycloakClient.listarUsuarios(token, prefixo, 0, 100)).hasSize(100);
+            var ultima = keycloakClient.listarUsuarios(token, prefixo, 100, 100);
+            assertThat(ultima).hasSize(25);
+            assertThat(ultima).anySatisfy(usuario -> assertThat(usuario.get("enabled")).isEqualTo(false));
+            assertThat(keycloakClient.listarMembrosPapel(token, "PROVIDER", 0, 100)).hasSize(100);
+            assertThat(keycloakClient.listarMembrosPapel(token, "PROVIDER", 100, 100))
+                    .hasSize(25).allSatisfy(usuario -> assertThat(usuario).containsKeys("id", "username", "firstName", "enabled"));
+            // Keycloak 26 já omite service accounts na consulta /users padrão.
+            assertThat(keycloakClient.listarUsuarios(token, "service-account-wonder-core", 0, 100)).isEmpty();
+            var listagem = new br.edu.ifrn.wonder.core.service.UsuarioAdminService(keycloakClient);
+            assertThat(listagem.listar(prefixo, "CUSTOMER", 100, 20).total()).isEqualTo(125);
+            var pagina = listagem.listar(prefixo, "PROVIDER", 100, 20);
+            assertThat(pagina.total()).isEqualTo(125);
+            assertThat(pagina.usuarios()).hasSize(20);
+            assertThat(pagina.temProxima()).isTrue();
+            assertThat(listagem.listar(prefixo, null, 123, 10).usuarios()).hasSize(2);
+            assertThat(listagem.listar(prefixo, null, 140, 10).total()).isEqualTo(125);
+            assertThat(listagem.listar(prefixo, "ADMIN", 0, 20).total()).isZero();
+        } finally {
+            for (UUID id : criados) {
+                cliente.delete().uri("/admin/realms/wonder/users/{id}", id)
+                        .headers(cabecalhos -> cabecalhos.setBearerAuth(token)).retrieve().toBodilessEntity();
+            }
+        }
+    }
+
+    @Test
+    void deveContarUsuariosHumanosSemDuplicarPapeisNemIncluirContaDeServico() {
+        String token = keycloakClient.obterToken();
+        RestClient cliente = RestClient.create(enderecoKeycloak());
+        List<UUID> usuariosCriados = new ArrayList<>();
+        // O realm importado contém somente a service account wonder-core.
+        assertThat(keycloakAdminService.contarUsuarios()).isZero();
+        try {
+            for (boolean habilitado : List.of(true, false)) {
+                var criacao = cliente.post().uri("/admin/realms/wonder/users")
+                        .headers(cabecalhos -> cabecalhos.setBearerAuth(token))
+                        .body(Map.of("username", "indicadores-" + UUID.randomUUID(), "enabled", habilitado))
+                        .retrieve().toBodilessEntity();
+                String localizacao = criacao.getHeaders().getLocation().toString();
+                UUID usuarioId = UUID.fromString(localizacao.substring(localizacao.lastIndexOf('/') + 1));
+                usuariosCriados.add(usuarioId);
+                if (habilitado) {
+                    keycloakAdminService.adicionarRoleProvider(usuarioId);
+                    assertThat(rolesEfetivas(cliente, token, usuarioId)).contains("CUSTOMER", "PROVIDER");
+                }
+            }
+
+            // Este contexto não contém banco/perfis locais: são contas apenas no Keycloak.
+            assertThat(keycloakAdminService.contarUsuarios()).isEqualTo(2);
+        } finally {
+            for (UUID usuarioId : usuariosCriados) {
+                cliente.delete().uri("/admin/realms/wonder/users/{id}", usuarioId)
+                        .headers(cabecalhos -> cabecalhos.setBearerAuth(token))
+                        .retrieve().toBodilessEntity();
+            }
+        }
+    }
+
+    @Test
     void deveConsultarEmailsApenasDosUsuariosComRoleAdmin() {
         String token = keycloakClient.obterToken();
         RestClient cliente = RestClient.create(enderecoKeycloak());

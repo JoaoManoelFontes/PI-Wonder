@@ -16,7 +16,9 @@ import br.edu.ifrn.wonder.core.domain.StatusPrestador;
 import br.edu.ifrn.wonder.core.domain.StatusCategoria;
 import br.edu.ifrn.wonder.core.domain.StatusServico;
 
-public interface PrestadorRepository extends JpaRepository<Prestador, Long> {
+public interface PrestadorRepository extends JpaRepository<Prestador, Long>, PrestadorListagemRepository {
+
+    long countByStatus(StatusPrestador status);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT prestador FROM Prestador prestador WHERE prestador.id = :id")
