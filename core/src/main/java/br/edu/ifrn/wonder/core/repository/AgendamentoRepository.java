@@ -67,4 +67,10 @@ public interface AgendamentoRepository extends JpaRepository<Agendamento, Long> 
             LocalDateTime fim,
             LocalDateTime inicio,
             StatusAgendamento status);
+
+    @EntityGraph(attributePaths = {"cliente", "prestador.perfilUsuario", "servico"})
+    List<Agendamento> findByStatusAndInicioGreaterThanEqualAndInicioLessThanOrderByInicioAsc(
+            StatusAgendamento status,
+            LocalDateTime inicio,
+            LocalDateTime fim);
 }

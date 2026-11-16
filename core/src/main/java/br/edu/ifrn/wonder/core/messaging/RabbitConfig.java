@@ -37,6 +37,7 @@ public class RabbitConfig {
 	public static final String PROVIDER_REQUEST_CREATED_QUEUE = "provider_request_created";
 	public static final String REPORT_GENERATION_QUEUE = "wonder.report.generation";
 	public static final String PROVIDER_REQUEST_CREATED_ROUTING_KEY = "provider_request_created";
+	public static final String APPOINTMENT_NOTIFICATION_ROUTING_KEY = "appointment.notification";
 	public static final String PROVIDER_REQUEST_CREATED_DLQ = "provider_request_created.dlq";
 	public static final String REPORT_GENERATION_ROUTING_KEY = "report.generation.requested";
 

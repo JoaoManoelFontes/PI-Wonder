@@ -8,8 +8,11 @@ import java.util.Locale;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.amqp.AmqpException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 import br.edu.ifrn.wonder.core.domain.Agendamento;
@@ -23,15 +26,19 @@ import br.edu.ifrn.wonder.core.domain.StatusPrestador;
 import br.edu.ifrn.wonder.core.domain.StatusServico;
 import br.edu.ifrn.wonder.core.dto.CadastroAgendamentoRequest;
 import br.edu.ifrn.wonder.core.dto.AtualizacaoStatusAgendamentoRequest;
+import br.edu.ifrn.wonder.core.dto.AgendamentoNotificacaoEvent;
+import br.edu.ifrn.wonder.core.messaging.RabbitProvider;
 import br.edu.ifrn.wonder.core.repository.AgendamentoRepository;
 import br.edu.ifrn.wonder.core.repository.HorarioAtendimentoRepository;
 import br.edu.ifrn.wonder.core.repository.HistoricoAgendamentoRepository;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
 import br.edu.ifrn.wonder.core.repository.ServicoRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AgendamentoService {
 
     private static final List<StatusAgendamento> STATUS_QUE_BLOQUEIAM_AGENDA = List.of(
@@ -45,6 +52,7 @@ public class AgendamentoService {
     private final HorarioAtendimentoRepository horarioAtendimentoRepository;
     private final AgendamentoRepository agendamentoRepository;
     private final HistoricoAgendamentoRepository historicoAgendamentoRepository;
+    private final RabbitProvider rabbitProvider;
 
     @Transactional
     public Agendamento atualizarStatus(
@@ -96,6 +104,8 @@ public class AgendamentoService {
                 .alteradoEm(agora)
                 .motivo(motivo)
                 .build());
+        notificarAposCommit(agendamento, novoStatus.name().toLowerCase(Locale.ROOT),
+                donoCliente ? "cliente" : donoPrestador ? "prestador" : "administrador", motivo);
         return agendamento;
     }
 
@@ -122,7 +132,7 @@ public class AgendamentoService {
         validarHorarioDeAtendimento(prestador.getId(), servico.getDuracaoMin(), request.inicio(), fim);
         validarDisponibilidade(prestador.getId(), request.inicio(), fim);
 
-        return agendamentoRepository.save(Agendamento.builder()
+        Agendamento agendamento = agendamentoRepository.save(Agendamento.builder()
                 .cliente(cliente)
                 .prestador(prestador)
                 .servico(servico)
@@ -130,6 +140,45 @@ public class AgendamentoService {
                 .fim(fim)
                 .status(StatusAgendamento.PENDENTE)
                 .build());
+        notificarAposCommit(agendamento, null, "cliente", null);
+        return agendamento;
+    }
+
+    private void notificarAposCommit(
+            Agendamento agendamento,
+            String statusNovo,
+            String alteradoPorTipo,
+            String motivo) {
+        AgendamentoNotificacaoEvent evento = new AgendamentoNotificacaoEvent(
+                agendamento.getId(),
+                agendamento.getCliente().getKeycloakId(),
+                agendamento.getPrestador().getPerfilUsuario().getKeycloakId(),
+                agendamento.getPrestador().getNomeEstab(),
+                agendamento.getServico().getNome(),
+                agendamento.getInicio(),
+                statusNovo,
+                alteradoPorTipo,
+                motivo);
+
+        Runnable publicar = () -> {
+            try {
+                rabbitProvider.sendAppointmentNotification(evento);
+            } catch (AmqpException exception) {
+                log.error("Falha ao publicar notificação do agendamento {}; operação preservada",
+                        evento.agendamentoId(), exception);
+            }
+        };
+
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            publicar.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                publicar.run();
+            }
+        });
     }
 
     @Transactional(readOnly = true)
