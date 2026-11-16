@@ -20,6 +20,15 @@ public class KeycloakAdminService {
 
     private final KeycloakClient keycloakClient;
 
+    public long contarUsuarios() {
+        try {
+            return keycloakClient.contarUsuarios();
+        } catch (RestClientException | IllegalStateException excecao) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Não foi possível consultar o total de usuários no Keycloak", excecao);
+        }
+    }
+
     public List<String> listarEmailsAdministradores() {
         try {
             String token = keycloakClient.obterToken();

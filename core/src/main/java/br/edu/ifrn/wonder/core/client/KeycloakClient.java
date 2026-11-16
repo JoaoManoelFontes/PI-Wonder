@@ -1,5 +1,10 @@
 package br.edu.ifrn.wonder.core.client;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -50,6 +55,90 @@ public class KeycloakClient {
         return resposta;
     }
 
+    public List<Map<String, Object>> listarMembrosPapel(String token, String papel, int inicio, int limite) {
+        var resposta = keycloakRestClient.get()
+                .uri("/admin/realms/{realm}/roles/{papel}/users?first={inicio}&max={limite}&briefRepresentation=false",
+                        propriedades.realm(), papel, inicio, limite)
+                .headers(cabecalhos -> cabecalhos.setBearerAuth(token)).retrieve()
+                .body(new ParameterizedTypeReference<List<Map<String, Object>>>() {});
+        if (resposta == null) {
+            throw new IllegalStateException("Keycloak não retornou os membros do papel");
+        }
+        return resposta;
+    }
+
+    public List<Map<String, Object>> listarPessoas(String token, String busca, String papel) {
+        Map<String, Map<String, Object>> pessoas = new LinkedHashMap<>();
+        for (int inicio = 0; ; inicio += 100) {
+            var pagina = listarUsuarios(token, busca, inicio, 100);
+            for (var usuario : pagina) {
+                if (usuario.get("serviceAccountClientId") == null) {
+                    pessoas.put((String) usuario.get("id"), usuario);
+                }
+            }
+            if (pagina.size() < 100) {
+                break;
+            }
+        }
+        if (papel != null) {
+            var membros = new HashSet<String>();
+            for (String papelAssociado : listarPapeisQueConcedem(token, papel)) {
+                for (int inicio = 0; ; inicio += 100) {
+                    var pagina = listarMembrosPapel(token, papelAssociado, inicio, 100);
+                    for (var usuario : pagina) {
+                        membros.add((String) usuario.get("id"));
+                    }
+                    if (pagina.size() < 100) {
+                        break;
+                    }
+                }
+            }
+            pessoas.keySet().retainAll(membros);
+        }
+        return new ArrayList<>(pessoas.values());
+    }
+
+    private Set<String> listarPapeisQueConcedem(String token, String papel) {
+        Map<String, List<String>> composicoes = new LinkedHashMap<>();
+        for (int inicio = 0; ; inicio += 100) {
+            var pagina = keycloakRestClient.get()
+                    .uri("/admin/realms/{realm}/roles?first={inicio}&max=100", propriedades.realm(), inicio)
+                    .headers(cabecalhos -> cabecalhos.setBearerAuth(token)).retrieve()
+                    .body(new ParameterizedTypeReference<List<Map<String, Object>>>() {});
+            if (pagina == null) {
+                throw new IllegalStateException("Keycloak não retornou os papéis");
+            }
+            for (var representacao : pagina) {
+                if (Boolean.TRUE.equals(representacao.get("composite"))) {
+                    String nome = (String) representacao.get("name");
+                    var componentes = keycloakRestClient.get()
+                            .uri("/admin/realms/{realm}/roles/{papel}/composites/realm", propriedades.realm(), nome)
+                            .headers(cabecalhos -> cabecalhos.setBearerAuth(token)).retrieve()
+                            .body(KeycloakRoleResponse[].class);
+                    if (componentes == null) {
+                        throw new IllegalStateException("Keycloak não retornou a composição do papel");
+                    }
+                    composicoes.put(nome, Arrays.stream(componentes).map(KeycloakRoleResponse::name).toList());
+                }
+            }
+            if (pagina.size() < 100) {
+                break;
+            }
+        }
+        var papeis = new LinkedHashSet<String>();
+        papeis.add(papel);
+        boolean alterado;
+        do {
+            alterado = false;
+            for (var composicao : composicoes.entrySet()) {
+                if (composicao.getValue().stream().anyMatch(papeis::contains)) {
+                    alterado |= papeis.add(composicao.getKey());
+                }
+            }
+        } while (alterado);
+        return papeis;
+    }
+
     public void atualizarUsuario(String token, UUID id, Map<String, Object> usuario) {
         keycloakRestClient.put().uri("/admin/realms/{realm}/users/{id}", propriedades.realm(), id)
                 .headers(cabecalhos -> cabecalhos.setBearerAuth(token))
@@ -82,6 +171,24 @@ public class KeycloakClient {
             throw new IllegalStateException("Keycloak não retornou um access token");
         }
         return resposta.accessToken();
+    }
+
+    public long contarUsuarios() {
+        String token = obterToken();
+        String resposta = keycloakRestClient.get()
+                .uri("/admin/realms/{realm}/users/count", propriedades.realm())
+                .headers(cabecalhos -> cabecalhos.setBearerAuth(token))
+                .retrieve()
+                .body(String.class);
+
+        if (resposta == null || !resposta.strip().matches("[0-9]+")) {
+            throw new IllegalStateException("Keycloak não retornou uma contagem válida de usuários");
+        }
+        try {
+            return Long.parseLong(resposta.strip());
+        } catch (NumberFormatException excecao) {
+            throw new IllegalStateException("Contagem de usuários do Keycloak fora do limite suportado", excecao);
+        }
     }
 
     public String buscarEmailPorKeycloakId(UUID keycloakId) {
