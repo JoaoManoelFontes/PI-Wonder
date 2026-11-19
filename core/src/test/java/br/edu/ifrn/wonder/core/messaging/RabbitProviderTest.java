@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -15,6 +16,9 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 import br.edu.ifrn.wonder.core.dto.ProviderRequestCreated;
 import br.edu.ifrn.wonder.core.dto.ProviderRequestReviewed;
+import br.edu.ifrn.wonder.core.dto.ExportacaoSolicitada;
+import br.edu.ifrn.wonder.core.dto.ExportacaoSolicitada.Tipo;
+import br.edu.ifrn.wonder.core.dto.UsuariosAdminExportacaoResponse;
 import br.edu.ifrn.wonder.core.dto.ProviderRequestReviewed.Resultado;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -43,9 +47,19 @@ class RabbitProviderTest {
     }
 
     @Test
-    void devePreservarPublicacaoDeRelatoriosComoTexto() {
-        publicador.sendReportGenerationJob("relatorio");
-        verify(rabbitTemplate).convertAndSend("wonder.events", "report.generation.requested", "relatorio");
+    void devePublicarComandoDeExportacaoComoJsonNaRotaCorreta() {
+        UUID id = UUID.randomUUID();
+        publicador.sendReportGenerationJob(new ExportacaoSolicitada(
+                id, Tipo.USUARIOS, new UsuariosAdminExportacaoResponse(List.of())));
+
+        var captor = ArgumentCaptor.forClass(Message.class);
+        verify(rabbitTemplate).send(eq("wonder.events"), eq("report.generation.requested"), captor.capture());
+        var mensagem = captor.getValue();
+        assertThat(mensagem.getMessageProperties().getContentType()).isEqualTo("application/json");
+        var json = JsonMapper.builder().build().readTree(new String(mensagem.getBody(), StandardCharsets.UTF_8));
+        assertThat(json.path("exportacaoId").asString()).isEqualTo(id.toString());
+        assertThat(json.path("tipo").asString()).isEqualTo("USUARIOS");
+        assertThat(json.path("dados").path("usuarios").isArray()).isTrue();
     }
 
     @ParameterizedTest

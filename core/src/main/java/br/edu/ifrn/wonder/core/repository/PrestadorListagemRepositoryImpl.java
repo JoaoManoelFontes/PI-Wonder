@@ -23,6 +23,25 @@ public class PrestadorListagemRepositoryImpl implements PrestadorListagemReposit
     @Transactional(readOnly = true)
     public Page<Prestador> buscarAdministrativos(String busca, List<UUID> responsaveis, StatusPrestador status,
             Instant de, Instant ate, boolean maisAntigos, int inicio, int limite) {
+        var filtros = montarFiltros(busca, responsaveis, status, de, ate);
+        var contagem = gerenciadorEntidades.createQuery("SELECT COUNT(prestador) FROM Prestador prestador"
+                + " JOIN prestador.perfilUsuario perfil" + filtros.clausula(), Long.class);
+        filtros.parametros().forEach(contagem::setParameter);
+        long total = contagem.getSingleResult();
+        var prestadores = montarConsulta(filtros, maisAntigos)
+                .setFirstResult(inicio).setMaxResults(limite).getResultList();
+        return new PageImpl<>(prestadores, Pageable.unpaged(), total);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Prestador> buscarAdministrativosParaExportacao(String busca, List<UUID> responsaveis,
+            StatusPrestador status, Instant de, Instant ate, boolean maisAntigos) {
+        return montarConsulta(montarFiltros(busca, responsaveis, status, de, ate), maisAntigos).getResultList();
+    }
+
+    private FiltrosAdministrativos montarFiltros(String busca, List<UUID> responsaveis, StatusPrestador status,
+            Instant de, Instant ate) {
         StringBuilder filtros = new StringBuilder(" WHERE 1=1");
         Map<String, Object> parametros = new LinkedHashMap<>();
         if (!busca.isEmpty()) {
@@ -44,16 +63,19 @@ public class PrestadorListagemRepositoryImpl implements PrestadorListagemReposit
             parametros.put("de", de);
             parametros.put("ate", ate);
         }
-        var contagem = gerenciadorEntidades.createQuery("SELECT COUNT(prestador) FROM Prestador prestador"
-                + " JOIN prestador.perfilUsuario perfil" + filtros, Long.class);
-        parametros.forEach(contagem::setParameter);
-        long total = contagem.getSingleResult();
+        return new FiltrosAdministrativos(filtros.toString(), parametros);
+    }
+
+    private jakarta.persistence.TypedQuery<Prestador> montarConsulta(
+            FiltrosAdministrativos filtros, boolean maisAntigos) {
         String direcao = maisAntigos ? " ASC" : " DESC";
         var consulta = gerenciadorEntidades.createQuery("SELECT prestador FROM Prestador prestador"
-                + " JOIN FETCH prestador.perfilUsuario perfil" + filtros
+                + " JOIN FETCH prestador.perfilUsuario perfil" + filtros.clausula()
                 + " ORDER BY prestador.criadoEm" + direcao + ", prestador.id" + direcao, Prestador.class);
-        parametros.forEach(consulta::setParameter);
-        var prestadores = consulta.setFirstResult(inicio).setMaxResults(limite).getResultList();
-        return new PageImpl<>(prestadores, Pageable.unpaged(), total);
+        filtros.parametros().forEach(consulta::setParameter);
+        return consulta;
+    }
+
+    private record FiltrosAdministrativos(String clausula, Map<String, Object> parametros) {
     }
 }

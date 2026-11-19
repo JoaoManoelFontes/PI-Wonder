@@ -31,6 +31,7 @@ import br.edu.ifrn.wonder.core.repository.AgendamentoRepository;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
 import br.edu.ifrn.wonder.core.security.SecurityConfig;
 import br.edu.ifrn.wonder.core.service.AdminDashboardService;
+import br.edu.ifrn.wonder.core.service.ExportacaoService;
 import br.edu.ifrn.wonder.core.service.KeycloakAdminService;
 
 @WebMvcTest(AdminDashboardController.class)
@@ -45,6 +46,8 @@ class AdminDashboardAgendamentosControllerTest {
     private PrestadorRepository prestadorRepository;
     @MockitoBean
     private KeycloakAdminService keycloakAdminService;
+    @MockitoBean
+    private ExportacaoService exportacaoService;
     @MockitoBean
     private Clock relogio;
     @MockitoBean

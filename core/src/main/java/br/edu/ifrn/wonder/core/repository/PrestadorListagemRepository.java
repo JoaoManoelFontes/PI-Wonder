@@ -10,4 +10,7 @@ import br.edu.ifrn.wonder.core.domain.StatusPrestador;
 public interface PrestadorListagemRepository {
     Page<Prestador> buscarAdministrativos(String busca, List<UUID> responsaveis, StatusPrestador status,
             Instant de, Instant ate, boolean maisAntigos, int inicio, int limite);
+
+    List<Prestador> buscarAdministrativosParaExportacao(String busca, List<UUID> responsaveis,
+            StatusPrestador status, Instant de, Instant ate, boolean maisAntigos);
 }

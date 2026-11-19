@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import br.edu.ifrn.wonder.core.dto.DashboardIndicadoresResponse;
 import br.edu.ifrn.wonder.core.security.SecurityConfig;
 import br.edu.ifrn.wonder.core.service.AdminDashboardService;
+import br.edu.ifrn.wonder.core.service.ExportacaoService;
 
 @WebMvcTest(AdminDashboardController.class)
 @Import(SecurityConfig.class)
@@ -30,6 +31,8 @@ class AdminDashboardControllerTest {
     private MockMvc mockMvc;
     @MockitoBean
     private AdminDashboardService adminDashboardService;
+    @MockitoBean
+    private ExportacaoService exportacaoService;
     @MockitoBean
     private OpaqueTokenIntrospector introspectorTokenOpaco;
 

@@ -17,6 +17,7 @@ import br.edu.ifrn.wonder.core.client.KeycloakClient;
 import br.edu.ifrn.wonder.core.dto.AtualizacaoUsuarioAdminRequest;
 import br.edu.ifrn.wonder.core.dto.UsuarioAdminResponse;
 import br.edu.ifrn.wonder.core.dto.UsuariosAdminPaginaResponse;
+import br.edu.ifrn.wonder.core.dto.UsuariosAdminExportacaoResponse;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -29,19 +30,30 @@ public class UsuarioAdminService {
     }
 
     public UsuariosAdminPaginaResponse listar(String busca, String papel, int inicio, int limite) {
-        if (inicio < 0 || limite < 1 || limite > 100 || busca.length() > 255
+        if (inicio < 0 || limite < 1 || limite > 100) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Paginação ou busca inválida");
+        }
+        var usuarios = consultarParaListagem(busca, papel);
+        return new UsuariosAdminPaginaResponse(usuarios.stream().skip(inicio).limit(limite).toList(),
+                inicio, limite, (long) inicio + limite < usuarios.size(), usuarios.size());
+    }
+
+    public UsuariosAdminExportacaoResponse listarParaExportacao(String busca, String papel) {
+        return new UsuariosAdminExportacaoResponse(consultarParaListagem(busca, papel));
+    }
+
+    private List<UsuarioAdminResponse> consultarParaListagem(String busca, String papel) {
+        if (busca.length() > 255
                 || (papel != null && !List.of("CUSTOMER", "PROVIDER", "ADMIN").contains(papel))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Paginação ou busca inválida");
         }
         try {
             String token = keycloakClient.obterToken();
-            var usuarios = keycloakClient.listarPessoas(token, busca.trim(), papel).stream()
+            return keycloakClient.listarPessoas(token, busca.trim(), papel).stream()
                     .map(UsuarioAdminResponse::from)
                     .sorted(Comparator.comparing(UsuarioAdminResponse::username)
                             .thenComparing(usuario -> usuario.id().toString()))
                     .toList();
-            return new UsuariosAdminPaginaResponse(usuarios.stream().skip(inicio).limit(limite).toList(),
-                    inicio, limite, (long) inicio + limite < usuarios.size(), usuarios.size());
         } catch (RestClientException | IllegalStateException excecao) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Não foi possível consultar os usuários no Keycloak", excecao);

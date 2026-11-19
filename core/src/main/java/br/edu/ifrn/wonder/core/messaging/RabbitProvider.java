@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 
 import br.edu.ifrn.wonder.core.dto.ProviderRequestCreated;
 import br.edu.ifrn.wonder.core.dto.ProviderRequestReviewed;
+import br.edu.ifrn.wonder.core.dto.ExportacaoSolicitada;
 
 @Component
 public class RabbitProvider {
@@ -26,11 +27,11 @@ public class RabbitProvider {
 		);
 	}
 
-	public void sendReportGenerationJob(String message) {
-		rabbitTemplate.convertAndSend(
+	public void sendReportGenerationJob(ExportacaoSolicitada solicitacao) {
+		rabbitTemplate.send(
 				RabbitConfig.EXCHANGE,
 				RabbitConfig.REPORT_GENERATION_ROUTING_KEY,
-				message
+				conversorJson.toMessage(solicitacao, new MessageProperties())
 		);
 	}
 

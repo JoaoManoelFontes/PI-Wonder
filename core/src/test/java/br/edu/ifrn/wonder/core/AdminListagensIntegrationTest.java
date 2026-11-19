@@ -5,11 +5,13 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +23,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.amqp.rabbit.core.RabbitAdmin;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
@@ -46,6 +50,8 @@ import br.edu.ifrn.wonder.core.domain.Prestador;
 import br.edu.ifrn.wonder.core.domain.StatusPrestador;
 import br.edu.ifrn.wonder.core.repository.PerfilUsuarioRepository;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
+import br.edu.ifrn.wonder.core.messaging.RabbitConfig;
+import tools.jackson.databind.json.JsonMapper;
 
 @Testcontainers
 @SpringBootTest
@@ -72,6 +78,8 @@ class AdminListagensIntegrationTest {
     @Autowired PrestadorRepository prestadores;
     @Autowired PerfilUsuarioRepository perfis;
     @Autowired JdbcTemplate jdbc;
+    @Autowired RabbitTemplate rabbitTemplate;
+    @Autowired JsonMapper jsonMapper;
     @MockitoSpyBean KeycloakClient keycloak;
     final List<UUID> contas = new ArrayList<>();
     String token;
@@ -79,6 +87,7 @@ class AdminListagensIntegrationTest {
     @BeforeEach
     void preparar() {
         jdbc.execute("TRUNCATE TABLE perfis_usuarios CASCADE");
+        new RabbitAdmin(rabbitTemplate.getConnectionFactory()).purgeQueue(RabbitConfig.REPORT_GENERATION_QUEUE);
         token = keycloak.obterToken();
     }
 
@@ -111,6 +120,69 @@ class AdminListagensIntegrationTest {
                         .param("data_inicio", "2026-11-01").param("data_fim", "2026-11-01")
                         .param("ordem", "mais_antigos").param("inicio", "1").param("limite", "1"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.prestadores[0].id").value(porResponsavel.getId()));
+    }
+
+    @Test
+    void devePrepararExportacoesComTodosOsResultadosFiltradosSemPaginacao() throws Exception {
+        UUID ana = criarConta("Ana", "Silva");
+        UUID bia = criarConta("Bia", "Souza");
+        String usernameAna = keycloak.buscarUsuario(token, ana).get("username").toString();
+        criarPrestador(ana, "Salão Ana", StatusPrestador.PENDENTE, "2026-11-01T03:00:00Z");
+        criarPrestador(bia, "Salão Bia", StatusPrestador.PENDENTE, "2026-11-02T03:00:00Z");
+        criarPrestador(criarConta("Carla", "Lima"), "Salão Carla", StatusPrestador.SUSPENSO,
+                "2026-11-03T03:00:00Z");
+
+        mvc.perform(post("/admin/usuarios/exportacoes")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
+                        .param("busca", usernameAna).param("papel", "CUSTOMER"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.exportacao_id").isNotEmpty())
+                .andExpect(jsonPath("$.mensagem").isNotEmpty())
+                .andExpect(jsonPath("$.usuarios").doesNotExist());
+
+        var mensagemUsuarios = rabbitTemplate.receive(RabbitConfig.REPORT_GENERATION_QUEUE, 1000);
+        assertThat(mensagemUsuarios).isNotNull();
+        var eventoUsuarios = jsonMapper.readTree(
+                new String(mensagemUsuarios.getBody(), StandardCharsets.UTF_8));
+        assertThat(eventoUsuarios.path("tipo").asString()).isEqualTo("USUARIOS");
+        assertThat(eventoUsuarios.path("dados").path("usuarios")).hasSize(1);
+        assertThat(eventoUsuarios.path("dados").path("usuarios").get(0).path("id").asString())
+                .isEqualTo(ana.toString());
+
+        mvc.perform(post("/admin/prestadores/exportacoes")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
+                        .param("status", "pendente")
+                        .param("data_inicio", "2026-11-01").param("data_fim", "2026-11-30")
+                        .param("ordem", "mais_antigos"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.exportacao_id").isNotEmpty())
+                .andExpect(jsonPath("$.prestadores").doesNotExist());
+
+        var mensagemPrestadores = rabbitTemplate.receive(RabbitConfig.REPORT_GENERATION_QUEUE, 1000);
+        assertThat(mensagemPrestadores).isNotNull();
+        var eventoPrestadores = jsonMapper.readTree(
+                new String(mensagemPrestadores.getBody(), StandardCharsets.UTF_8));
+        assertThat(eventoPrestadores.path("tipo").asString()).isEqualTo("PRESTADORES");
+        assertThat(eventoPrestadores.path("dados").path("prestadores")).hasSize(2);
+        assertThat(eventoPrestadores.path("dados").path("prestadores").get(0).path("nome_estab").asString())
+                .isEqualTo("Salão Ana");
+        assertThat(eventoPrestadores.path("dados").path("prestadores").get(1).path("nome_estab").asString())
+                .isEqualTo("Salão Bia");
+    }
+
+    @Test
+    void deveValidarFiltrosDasExportacoesAntesDeConsultarFontes() throws Exception {
+        clearInvocations(keycloak);
+        mvc.perform(post("/admin/usuarios/exportacoes")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
+                        .param("papel", "TODOS"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/admin/prestadores/exportacoes")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
+                        .param("data_inicio", "2026-11-01"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(keycloak);
+        assertThat(rabbitTemplate.receive(RabbitConfig.REPORT_GENERATION_QUEUE, 100)).isNull();
     }
 
     @Test
