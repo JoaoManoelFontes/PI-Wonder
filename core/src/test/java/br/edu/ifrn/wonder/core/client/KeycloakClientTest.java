@@ -41,6 +41,47 @@ class KeycloakClientTest {
         cliente = new KeycloakClient(construtor.build(), propriedades("secret+local&"));
     }
 
+    @ParameterizedTest
+    @ValueSource(longs = {0, 1248, 3000000000L})
+    void deveConsultarContagemSemFiltrosEAutenticarChamada(long total) {
+        esperarTokenDeContagem();
+        servidor.expect(requestTo("http://keycloak/admin/realms/wonder/users/count"))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("Authorization", "Bearer token"))
+                .andRespond(withSuccess(Long.toString(total), MediaType.APPLICATION_JSON));
+
+        assertThat(cliente.contarUsuarios()).isEqualTo(total);
+        servidor.verify();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "null", "-1", "abc", "1.5", "\"7\"", "9223372036854775808"})
+    void deveRejeitarContagemAusenteOuInvalida(String corpo) {
+        esperarTokenDeContagem();
+        servidor.expect(requestTo("http://keycloak/admin/realms/wonder/users/count"))
+                .andRespond(withSuccess(corpo, MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(cliente::contarUsuarios).isInstanceOf(IllegalStateException.class);
+        servidor.verify();
+    }
+
+    @Test
+    void devePropagarFalhaHttpDaContagem() {
+        esperarTokenDeContagem();
+        servidor.expect(requestTo("http://keycloak/admin/realms/wonder/users/count"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        assertThatThrownBy(cliente::contarUsuarios).isInstanceOf(RestClientResponseException.class);
+        servidor.verify();
+    }
+
+    private void esperarTokenDeContagem() {
+        servidor.expect(requestTo("http://keycloak/realms/wonder/protocol/openid-connect/token"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().string(containsString("grant_type=client_credentials")))
+                .andRespond(withSuccess("{\"access_token\":\"token\"}", MediaType.APPLICATION_JSON));
+    }
+
     @Test
     void deveCodificarBuscaSemTransformarMaisEmEspacoOuCriarOutroParametro() {
         servidor.expect(requestTo("http://keycloak/admin/realms/wonder/users?search=maria%2Bteste%40example.com%20%26&first=0&max=21&briefRepresentation=false"))

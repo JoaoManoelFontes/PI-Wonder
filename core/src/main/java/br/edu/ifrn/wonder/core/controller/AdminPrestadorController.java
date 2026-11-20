@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
+import br.edu.ifrn.wonder.core.dto.PrestadoresAdminPaginaResponse;
 
 import br.edu.ifrn.wonder.core.domain.Prestador;
 import br.edu.ifrn.wonder.core.dto.AtualizacaoStatusPrestadorRequest;
@@ -27,6 +29,19 @@ public class AdminPrestadorController {
 
     private final PrestadorService prestadorService;
     private final UsuarioAutenticadoProvider usuarioAutenticadoProvider;
+
+    @GetMapping
+    PrestadoresAdminPaginaResponse listar(
+            @RequestParam(name = "busca", defaultValue = "") String busca,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "data_inicio", required = false) String dataInicio,
+            @RequestParam(name = "data_fim", required = false) String dataFim,
+            @RequestParam(name = "ordem", required = false) String ordem,
+            @RequestParam(name = "inicio", defaultValue = "0") int inicio,
+            @RequestParam(name = "limite", defaultValue = "20") int limite) {
+        return prestadorService.listarAdmin(busca, status, dataInicio, dataFim,
+                ordem == null ? "mais_recentes" : ordem, inicio, limite);
+    }
 
     @GetMapping("/pendentes")
     List<PrestadorAdminResumoResponse> listarPendentes() {
