@@ -45,4 +45,15 @@ public class Notificacao {
 
     @Column(name = "criado_em", nullable = false, updatable = false)
     private Instant criadoEm;
+
+    public static Notificacao criar(UUID usuarioKeycloakId, String tipo, String mensagem, String chaveEvento) {
+        Notificacao notificacao = new Notificacao();
+        notificacao.usuarioKeycloakId = usuarioKeycloakId;
+        notificacao.tipo = tipo;
+        notificacao.mensagem = mensagem;
+        notificacao.status = StatusNotificacao.PENDENTE;
+        notificacao.chaveEvento = chaveEvento;
+        notificacao.criadoEm = Instant.now();
+        return notificacao;
+    }
 }
