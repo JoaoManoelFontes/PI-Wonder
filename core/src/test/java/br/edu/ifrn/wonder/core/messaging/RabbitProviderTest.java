@@ -6,6 +6,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.ArgumentMatchers.eq;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -15,6 +17,7 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 import br.edu.ifrn.wonder.core.dto.ProviderRequestCreated;
 import br.edu.ifrn.wonder.core.dto.ProviderRequestReviewed;
+import br.edu.ifrn.wonder.core.dto.AgendamentoNotificacaoEvent;
 import br.edu.ifrn.wonder.core.dto.ProviderRequestReviewed.Resultado;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -69,5 +72,25 @@ class RabbitProviderTest {
         } else {
             assertThat(json.path("motivoRejeicao").isNull()).isTrue();
         }
+    }
+
+    @Test
+    void devePublicarEventoDeAgendamentoComoJson() {
+        UUID cliente = UUID.randomUUID();
+        UUID prestador = UUID.randomUUID();
+        var evento = new AgendamentoNotificacaoEvent(15L, cliente, prestador,
+                "Studio Wonder", "Corte", LocalDateTime.of(2026, 11, 20, 14, 0),
+                "confirmado", "prestador", null);
+
+        publicador.sendAppointmentNotification(evento);
+
+        var captor = ArgumentCaptor.forClass(Message.class);
+        verify(rabbitTemplate).send(eq("wonder.events"), eq("appointment.notification"), captor.capture());
+        var json = JsonMapper.builder().build().readTree(
+                new String(captor.getValue().getBody(), StandardCharsets.UTF_8));
+        assertThat(json.path("agendamentoId").asLong()).isEqualTo(15L);
+        assertThat(json.path("clienteKeycloakId").asString()).isEqualTo(cliente.toString());
+        assertThat(json.path("prestadorKeycloakId").asString()).isEqualTo(prestador.toString());
+        assertThat(json.path("statusNovo").asString()).isEqualTo("confirmado");
     }
 }
