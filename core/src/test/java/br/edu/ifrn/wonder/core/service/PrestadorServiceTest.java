@@ -34,6 +34,7 @@ import br.edu.ifrn.wonder.core.dto.ProviderRequestReviewed;
 import br.edu.ifrn.wonder.core.dto.ProviderRequestReviewed.Resultado;
 import br.edu.ifrn.wonder.core.messaging.RabbitProvider;
 import br.edu.ifrn.wonder.core.repository.HorarioAtendimentoRepository;
+import br.edu.ifrn.wonder.core.repository.NotificacaoRepository;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
 import br.edu.ifrn.wonder.core.repository.ServicoRepository;
 import org.junit.jupiter.api.Test;
@@ -87,6 +88,9 @@ class PrestadorServiceTest {
 
     @Mock
     private RabbitProvider rabbitProvider;
+
+    @Mock
+    private NotificacaoRepository notificacaoRepository;
 
     @InjectMocks
     private PrestadorService prestadorService;
