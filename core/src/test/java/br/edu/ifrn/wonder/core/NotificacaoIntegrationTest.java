@@ -76,6 +76,59 @@ class NotificacaoIntegrationTest {
     }
 
     @Test
+    void devePaginarAvisosDoUsuarioEValidarParametros() throws Exception {
+        UUID usuario = UUID.randomUUID();
+        inserir(usuario, "antigo", "LIDA", Instant.parse("2026-11-15T10:00:00Z"));
+        inserir(usuario, "recente", "PENDENTE", Instant.parse("2026-11-15T11:00:00Z"));
+        inserir(UUID.randomUUID(), "privado", "PENDENTE", Instant.parse("2026-11-15T12:00:00Z"));
+
+        mockMvc.perform(get("/notificacoes/pagina").param("pagina", "0").param("limite", "1")
+                        .with(jwt().jwt(token -> token.subject(usuario.toString()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(2))
+                .andExpect(jsonPath("$.temProxima").value(true))
+                .andExpect(jsonPath("$.itens.length()").value(1))
+                .andExpect(jsonPath("$.itens[0].mensagem").value("recente"));
+
+        mockMvc.perform(get("/notificacoes/pagina").param("pagina", "1").param("limite", "1")
+                        .with(jwt().jwt(token -> token.subject(usuario.toString()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.temProxima").value(false))
+                .andExpect(jsonPath("$.itens[0].mensagem").value("antigo"));
+
+        mockMvc.perform(get("/notificacoes/pagina").param("status", "pendente")
+                        .with(jwt().jwt(token -> token.subject(usuario.toString()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(1));
+
+        mockMvc.perform(get("/notificacoes/pagina").param("limite", "51")
+                        .with(jwt().jwt(token -> token.subject(usuario.toString()))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void deveMarcarTodosOsAvisosDoUsuarioSemAlterarOsDeOutro() throws Exception {
+        UUID usuario = UUID.randomUUID();
+        UUID outroUsuario = UUID.randomUUID();
+        inserir(usuario, "primeiro", "PENDENTE", Instant.now());
+        inserir(usuario, "segundo", "PENDENTE", Instant.now().minusSeconds(60));
+        inserir(outroUsuario, "privado", "PENDENTE", Instant.now());
+
+        mockMvc.perform(patch("/notificacoes/lidas")
+                        .with(jwt().jwt(token -> token.subject(usuario.toString()))))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/notificacoes/pagina").param("status", "pendente")
+                        .with(jwt().jwt(token -> token.subject(usuario.toString()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(0));
+        Integer pendentes = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM notificacoes WHERE usuario_keycloak_id = ? AND status = 'PENDENTE'",
+                Integer.class, outroUsuario);
+        org.assertj.core.api.Assertions.assertThat(pendentes).isEqualTo(1);
+    }
+
+    @Test
     void deveValidarAutenticacaoEStatus() throws Exception {
         mockMvc.perform(get("/notificacoes")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/notificacoes").param("status", "invalido")
