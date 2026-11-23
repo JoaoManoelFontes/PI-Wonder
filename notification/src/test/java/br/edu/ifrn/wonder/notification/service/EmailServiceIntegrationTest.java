@@ -296,6 +296,9 @@ class EmailServiceIntegrationTest {
         assertThat(rejeitada).isNotNull();
         assertThat(new String(rejeitada.getBody(), StandardCharsets.UTF_8)).isEqualTo(evento);
         assertThat(mensagensRecebidas()).isEmpty();
+
+    }
+
     @Test
     void deveConsumirEventoDeAgendamentoEPersistirAvisosDosParticipantes() throws Exception {
         MessageProperties propriedades = new MessageProperties();
