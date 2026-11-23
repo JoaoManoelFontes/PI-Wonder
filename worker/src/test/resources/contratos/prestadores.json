@@ -1,0 +1,10 @@
+{
+  "exportacaoId": "f7cce9df-37bf-4ed0-8189-3d00eb540a13",
+  "tipo": "PRESTADORES",
+  "email": "ana@example.com",
+  "nome": "Ana Silva",
+  "dados": {"prestadores": [
+    {"id":42,"usuario_id":"14128674-d423-4b67-91f5-dca790dc3940","nome_estab":"Salão \"Ana\"; Centro","responsavel_nome":null,"status":"ativo","foto_url":"/foto","criado_em":"2026-11-01T02:30:00Z"},
+    {"id":43,"usuario_id":"24128674-d423-4b67-91f5-dca790dc3940","nome_estab":"Outro\nSalão","responsavel_nome":"João","status":"pendente","foto_url":null,"criado_em":"2026-11-01T12:30:00Z"}
+  ]}
+}

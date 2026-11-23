@@ -52,7 +52,13 @@ Erros de conversão, validação ou SMTP rejeitam o evento e o encaminham para a
 `provider_request_created.dlq`. Não há reenvio automático. Antes de republicar uma mensagem,
 confira o erro: falhas parciais de SMTP podem ter entregado alguns emails.
 A antiga fila `wonder.notification`, se existir no broker, não é apagada automaticamente
-e deixa de ser consumida por esta aplicação. O fluxo de relatórios do worker mantém o contrato em texto.
+e deixa de ser consumida por esta aplicação. O worker publica o evento JSON
+`report.generation.completed` na fila exclusiva `wonder.notification.exportacao`, conforme
+[Exportações CSV](Exportacoes-CSV.md). O `ExportacaoConcluidaListener` consome essa fila,
+renderiza `templates/exportacao_concluida.txt` e chama `EmailService.enviar`. O e-mail
+confirma o sucesso e informa o nome do CSV, o link assinado original e sua validade
+em horário de Brasília. Eventos inválidos ou falhas de SMTP seguem para
+`wonder.notification.exportacao.dlq`, sem requeue automático.
 
 ## Conteúdo e templates
 

@@ -30,6 +30,25 @@ class RabbitProviderTest {
     private final RabbitTemplate rabbitTemplate = mock(RabbitTemplate.class);
     private final RabbitProvider publicador = new RabbitProvider(rabbitTemplate);
 
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"usuarios", "prestadores", "agendamentos"})
+    void devePreservarOsTresContratosConsumidosPeloWorker(String tipo) throws Exception {
+        var conversor = JsonMapper.builder().build();
+        var caminho = java.nio.file.Path.of("../worker/src/test/resources/contratos/" + tipo + ".json");
+        var esperado = conversor.readTree(java.nio.file.Files.readAllBytes(caminho));
+        Object dados = switch (tipo) {
+            case "usuarios" -> conversor.treeToValue(esperado.get("dados"), UsuariosAdminExportacaoResponse.class);
+            case "prestadores" -> conversor.treeToValue(esperado.get("dados"), br.edu.ifrn.wonder.core.dto.PrestadoresAdminExportacaoResponse.class);
+            default -> conversor.treeToValue(esperado.get("dados"), br.edu.ifrn.wonder.core.dto.DashboardAgendamentosResponse.class);
+        };
+        publicador.sendReportGenerationJob(new ExportacaoSolicitada(
+                UUID.fromString(esperado.get("exportacaoId").asString()), Tipo.valueOf(esperado.get("tipo").asString()),
+                dados, esperado.get("email").asString(), esperado.get("nome").asString()));
+        var captor = ArgumentCaptor.forClass(Message.class);
+        verify(rabbitTemplate).send(eq("wonder.events"), eq("report.generation.requested"), captor.capture());
+        assertThat(conversor.readTree(captor.getValue().getBody())).isEqualTo(esperado);
+    }
+
     @Test
     void devePublicarSolicitacaoComoJsonNaRotaCorreta() {
         var solicitacao = new ProviderRequestCreated(List.of("admin@example.com"),
@@ -50,7 +69,7 @@ class RabbitProviderTest {
     void devePublicarComandoDeExportacaoComoJsonNaRotaCorreta() {
         UUID id = UUID.randomUUID();
         publicador.sendReportGenerationJob(new ExportacaoSolicitada(
-                id, Tipo.USUARIOS, new UsuariosAdminExportacaoResponse(List.of())));
+                id, Tipo.USUARIOS, new UsuariosAdminExportacaoResponse(List.of()), "ana@example.com", "Ana Silva"));
 
         var captor = ArgumentCaptor.forClass(Message.class);
         verify(rabbitTemplate).send(eq("wonder.events"), eq("report.generation.requested"), captor.capture());
@@ -60,6 +79,8 @@ class RabbitProviderTest {
         assertThat(json.path("exportacaoId").asString()).isEqualTo(id.toString());
         assertThat(json.path("tipo").asString()).isEqualTo("USUARIOS");
         assertThat(json.path("dados").path("usuarios").isArray()).isTrue();
+        assertThat(json.path("email").asString()).isEqualTo("ana@example.com");
+        assertThat(json.path("nome").asString()).isEqualTo("Ana Silva");
     }
 
     @ParameterizedTest

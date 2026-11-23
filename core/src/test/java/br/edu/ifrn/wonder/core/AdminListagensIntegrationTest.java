@@ -125,6 +125,7 @@ class AdminListagensIntegrationTest {
     @Test
     void devePrepararExportacoesComTodosOsResultadosFiltradosSemPaginacao() throws Exception {
         UUID ana = criarConta("Ana", "Silva");
+        keycloak.atualizarUsuario(token, ana, Map.of("email", "ana@example.com"));
         UUID bia = criarConta("Bia", "Souza");
         String usernameAna = keycloak.buscarUsuario(token, ana).get("username").toString();
         criarPrestador(ana, "Salão Ana", StatusPrestador.PENDENTE, "2026-11-01T03:00:00Z");
@@ -133,7 +134,8 @@ class AdminListagensIntegrationTest {
                 "2026-11-03T03:00:00Z");
 
         mvc.perform(post("/admin/usuarios/exportacoes")
-                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
+                        .with(jwt().jwt(tokenJwt -> tokenJwt.subject(ana.toString()))
+                                .authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
                         .param("busca", usernameAna).param("papel", "CUSTOMER"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.exportacao_id").isNotEmpty())
@@ -145,12 +147,15 @@ class AdminListagensIntegrationTest {
         var eventoUsuarios = jsonMapper.readTree(
                 new String(mensagemUsuarios.getBody(), StandardCharsets.UTF_8));
         assertThat(eventoUsuarios.path("tipo").asString()).isEqualTo("USUARIOS");
+        assertThat(eventoUsuarios.path("email").asString()).isEqualTo("ana@example.com");
+        assertThat(eventoUsuarios.path("nome").asString()).isEqualTo("Ana Silva");
         assertThat(eventoUsuarios.path("dados").path("usuarios")).hasSize(1);
         assertThat(eventoUsuarios.path("dados").path("usuarios").get(0).path("id").asString())
                 .isEqualTo(ana.toString());
 
         mvc.perform(post("/admin/prestadores/exportacoes")
-                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
+                        .with(jwt().jwt(tokenJwt -> tokenJwt.subject(ana.toString()))
+                                .authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
                         .param("status", "pendente")
                         .param("data_inicio", "2026-11-01").param("data_fim", "2026-11-30")
                         .param("ordem", "mais_antigos"))
@@ -163,6 +168,8 @@ class AdminListagensIntegrationTest {
         var eventoPrestadores = jsonMapper.readTree(
                 new String(mensagemPrestadores.getBody(), StandardCharsets.UTF_8));
         assertThat(eventoPrestadores.path("tipo").asString()).isEqualTo("PRESTADORES");
+        assertThat(eventoPrestadores.path("email").asString()).isEqualTo("ana@example.com");
+        assertThat(eventoPrestadores.path("nome").asString()).isEqualTo("Ana Silva");
         assertThat(eventoPrestadores.path("dados").path("prestadores")).hasSize(2);
         assertThat(eventoPrestadores.path("dados").path("prestadores").get(0).path("nome_estab").asString())
                 .isEqualTo("Salão Ana");

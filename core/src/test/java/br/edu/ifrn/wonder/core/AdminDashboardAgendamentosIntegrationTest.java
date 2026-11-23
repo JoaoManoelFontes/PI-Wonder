@@ -54,6 +54,8 @@ import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
 import br.edu.ifrn.wonder.core.repository.ServicoRepository;
 import br.edu.ifrn.wonder.core.messaging.RabbitConfig;
 import br.edu.ifrn.wonder.core.service.KeycloakAdminService;
+import br.edu.ifrn.wonder.core.service.UsuarioAdminService;
+import br.edu.ifrn.wonder.core.dto.UsuarioAdminResponse;
 import tools.jackson.databind.json.JsonMapper;
 
 @SpringBootTest
@@ -80,6 +82,8 @@ class AdminDashboardAgendamentosIntegrationTest {
     private RabbitTemplate rabbitTemplate;
     @MockitoBean
     private KeycloakAdminService keycloakAdminService;
+    @MockitoBean
+    private UsuarioAdminService usuarioAdminService;
 
     private Servico servico;
 
@@ -141,11 +145,15 @@ class AdminDashboardAgendamentosIntegrationTest {
 
     @Test
     void devePrepararExportacaoComOMesmoResultadoAgregadoDaListagem() throws Exception {
+        UUID solicitanteId = UUID.randomUUID();
+        when(usuarioAdminService.detalhar(solicitanteId)).thenReturn(new UsuarioAdminResponse(
+                solicitanteId, "ana", "Ana", "Silva", "ana@example.com", true));
         criarAgendamento("2026-11-01T09:00", StatusAgendamento.PENDENTE);
         criarAgendamento("2026-11-02T09:00", StatusAgendamento.CONCLUIDO);
 
         mockMvc.perform(post("/admin/dashboard/agendamentos/exportacoes")
-                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
+                        .with(jwt().jwt(tokenJwt -> tokenJwt.subject(solicitanteId.toString()))
+                                .authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
                         .param("data_inicio", "2026-11-01").param("data_fim", "2026-11-02"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.exportacao_id").isNotEmpty())
@@ -156,6 +164,8 @@ class AdminDashboardAgendamentosIntegrationTest {
         assertThat(mensagem).isNotNull();
         var evento = jsonMapper.readTree(new String(mensagem.getBody(), StandardCharsets.UTF_8));
         assertThat(evento.path("tipo").asString()).isEqualTo("AGENDAMENTOS");
+        assertThat(evento.path("email").asString()).isEqualTo("ana@example.com");
+        assertThat(evento.path("nome").asString()).isEqualTo("Ana Silva");
         assertThat(evento.path("dados").path("data_inicio").asString()).isEqualTo("2026-11-01");
         assertThat(evento.path("dados").path("data_fim").asString()).isEqualTo("2026-11-02");
         assertThat(evento.path("dados").path("total_agendamentos").asLong()).isEqualTo(2);
