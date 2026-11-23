@@ -1,0 +1,12 @@
+Olá, %s!
+
+Sua exportação foi concluída com sucesso no Wonder.
+
+Arquivo CSV: %s
+Baixe o arquivo pelo link:
+%s
+
+O link é válido até %s (horário de Brasília).
+Após esse prazo, solicite uma nova exportação no Wonder.
+
+Equipe Wonder
