@@ -41,6 +41,8 @@ services:
     depends_on:
       mailhog:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 

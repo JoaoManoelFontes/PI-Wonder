@@ -105,6 +105,11 @@ class AdminPrestadorStatusIntegrationTest {
         assertThat(prestador.getAprovadoEm()).isNotNull();
         assertThat(prestador.getMotivoRejeicao()).isNull();
         verify(keycloakAdminService).adicionarRoleProvider(prestador.getPerfilUsuario().getKeycloakId());
+
+        mockMvc.perform(get("/notificacoes/pagina")
+                        .with(jwt().jwt(token -> token.subject(prestador.getPerfilUsuario().getKeycloakId().toString()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itens[0].tipo").value("prestador_aprovado"));
     }
 
     @Test
@@ -121,6 +126,12 @@ class AdminPrestadorStatusIntegrationTest {
 
         assertThat(prestador.getStatus()).isEqualTo(StatusPrestador.RASCUNHO);
         assertThat(prestador.getMotivoRejeicao()).isEqualTo("Corrigir documento");
+
+        mockMvc.perform(get("/notificacoes/pagina")
+                        .with(jwt().jwt(token -> token.subject(prestador.getPerfilUsuario().getKeycloakId().toString()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itens[0].tipo").value("prestador_correcao"))
+                .andExpect(jsonPath("$.itens[0].mensagem").value(org.hamcrest.Matchers.containsString("Corrigir documento")));
     }
 
     @Test

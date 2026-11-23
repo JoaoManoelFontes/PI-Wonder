@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,11 +29,13 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import br.edu.ifrn.wonder.notification.NotificationApplication;
 import br.edu.ifrn.wonder.notification.RabbitConfig;
+import br.edu.ifrn.wonder.notification.repository.NotificacaoRepository;
 
 import br.edu.ifrn.wonder.notification.dto.EmailRequest;
 import jakarta.mail.Multipart;
@@ -49,6 +52,9 @@ class EmailServiceIntegrationTest {
     static final RabbitMQContainer rabbitmq = new RabbitMQContainer(DockerImageName.parse("rabbitmq:4-alpine"));
 
     @Container
+    static final PostgreSQLContainer postgres = new PostgreSQLContainer(DockerImageName.parse("postgres:15"));
+
+    @Container
     static final GenericContainer<?> mailhog = new GenericContainer<>(DockerImageName.parse("mailhog/mailhog:v1.0.1"))
             .withExposedPorts(1025, 8025)
             .waitingFor(Wait.forHttp("/").forPort(8025));
@@ -59,6 +65,10 @@ class EmailServiceIntegrationTest {
         registro.add("spring.rabbitmq.port", rabbitmq::getAmqpPort);
         registro.add("spring.rabbitmq.username", rabbitmq::getAdminUsername);
         registro.add("spring.rabbitmq.password", rabbitmq::getAdminPassword);
+        registro.add("spring.datasource.url", postgres::getJdbcUrl);
+        registro.add("spring.datasource.username", postgres::getUsername);
+        registro.add("spring.datasource.password", postgres::getPassword);
+        registro.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
         registro.add("spring.mail.host", mailhog::getHost);
         registro.add("spring.mail.port", () -> mailhog.getMappedPort(1025));
         registro.add("spring.mail.username", () -> "");
@@ -75,12 +85,16 @@ class EmailServiceIntegrationTest {
     @Autowired
     private RabbitTemplate rabbitTemplate;
 
+    @Autowired
+    private NotificacaoRepository notificacaoRepository;
+
     private final HttpClient cliente = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     private final JsonMapper json = JsonMapper.builder().build();
 
     @BeforeEach
     void limparCaixaDeEntrada() throws Exception {
         consultar("/api/v1/messages", "DELETE");
+        notificacaoRepository.deleteAll();
     }
 
     @Test
@@ -282,6 +296,30 @@ class EmailServiceIntegrationTest {
         assertThat(rejeitada).isNotNull();
         assertThat(new String(rejeitada.getBody(), StandardCharsets.UTF_8)).isEqualTo(evento);
         assertThat(mensagensRecebidas()).isEmpty();
+    @Test
+    void deveConsumirEventoDeAgendamentoEPersistirAvisosDosParticipantes() throws Exception {
+        MessageProperties propriedades = new MessageProperties();
+        propriedades.setContentType("application/json");
+        propriedades.setHeader("__TypeId__", "br.edu.ifrn.wonder.core.dto.AgendamentoNotificacaoEvent");
+        UUID cliente = UUID.randomUUID();
+        UUID prestador = UUID.randomUUID();
+        String evento = """
+                {"agendamentoId":15,"clienteKeycloakId":"%s","prestadorKeycloakId":"%s",
+                 "nomeEstabelecimento":"Studio Wonder","nomeServico":"Corte",
+                 "inicio":"2026-11-20T14:00:00","statusNovo":null,
+                 "alteradoPorTipo":"cliente","motivo":null}
+                """.formatted(cliente, prestador);
+
+        rabbitTemplate.send(RabbitConfig.EXCHANGE, RabbitConfig.APPOINTMENT_NOTIFICATION_ROUTING_KEY,
+                new Message(evento.getBytes(StandardCharsets.UTF_8), propriedades));
+
+        long limite = System.nanoTime() + Duration.ofSeconds(15).toNanos();
+        while (notificacaoRepository.count() < 2 && System.nanoTime() < limite) {
+            Thread.sleep(100);
+        }
+        assertThat(notificacaoRepository.findAll()).hasSize(2)
+                .extracting(notificacao -> notificacao.getUsuarioKeycloakId())
+                .containsExactlyInAnyOrder(cliente, prestador);
     }
 
     private List<MimeMessage> mensagensRecebidas() throws Exception {

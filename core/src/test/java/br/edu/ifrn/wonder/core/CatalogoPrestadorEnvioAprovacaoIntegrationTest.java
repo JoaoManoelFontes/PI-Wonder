@@ -92,6 +92,11 @@ class CatalogoPrestadorEnvioAprovacaoIntegrationTest {
         assertThat(salvo.getAprovadoPor()).isEqualTo("revisor-anterior");
         assertThat(salvo.getPerfilUsuario().getId()).isEqualTo(perfilId);
 
+        mockMvc.perform(get("/notificacoes/pagina").with(jwt().jwt(token -> token.subject(keycloakId.toString()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.itens[0].tipo").value("prestador_enviado"));
+
         mockMvc.perform(get("/catalogo/prestadores/{id}", prestadorId))
                 .andExpect(status().isNotFound());
         mockMvc.perform(get("/admin/prestadores/pendentes")

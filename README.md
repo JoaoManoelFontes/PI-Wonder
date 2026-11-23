@@ -253,6 +253,8 @@ Administração de prestadores: [consulta de pendências, detalhe e alteração 
 
 Dashboard administrativo: [indicadores dos quatro cards protegidos por role ADMIN](docs/Admin-Dashboard.md), com usuários no Keycloak, prestadores e pendências locais e atendimentos concluídos no mês de São Paulo.
 
+Notificações no aplicativo: [eventos assíncronos de agendamento, lembretes, consulta autenticada e leitura](docs/Notificacoes-App.md).
+
 Disponibilidade: [exemplos das consultas de dias e horários livres](docs/Disponibilidade-Exemplos.md), com acesso sem login, parâmetros, respostas do seed, conflitos, listas vazias e critérios de validação (LW-015 e JN-015).
 
 Agendamentos: [criação autenticada e listagem por cliente, prestador ou administrador](docs/Agendamentos.md), com filtro por data, validação da grade de atendimento e proteção contra reservas sobrepostas.

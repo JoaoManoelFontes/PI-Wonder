@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import br.edu.ifrn.wonder.core.dto.ProviderRequestCreated;
 import br.edu.ifrn.wonder.core.dto.ProviderRequestReviewed;
 import br.edu.ifrn.wonder.core.dto.ExportacaoSolicitada;
+import br.edu.ifrn.wonder.core.dto.AgendamentoNotificacaoEvent;
 
 @Component
 public class RabbitProvider {
@@ -40,6 +41,14 @@ public class RabbitProvider {
 				RabbitConfig.EXCHANGE,
 				RabbitConfig.PROVIDER_REQUEST_REVIEWED_ROUTING_KEY,
 				conversorJson.toMessage(solicitacao, new MessageProperties())
+		);
+	}
+
+	public void sendAppointmentNotification(AgendamentoNotificacaoEvent evento) {
+		rabbitTemplate.send(
+				RabbitConfig.EXCHANGE,
+				RabbitConfig.APPOINTMENT_NOTIFICATION_ROUTING_KEY,
+				conversorJson.toMessage(evento, new MessageProperties())
 		);
 	}
 

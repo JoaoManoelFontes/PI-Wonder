@@ -36,6 +36,7 @@ import br.edu.ifrn.wonder.core.domain.StatusPrestador;
 import br.edu.ifrn.wonder.core.domain.StatusAgendamento;
 import br.edu.ifrn.wonder.core.domain.StatusCategoria;
 import br.edu.ifrn.wonder.core.domain.StatusServico;
+import br.edu.ifrn.wonder.core.domain.Notificacao;
 import br.edu.ifrn.wonder.core.dto.CadastroPrestadorRequest;
 import br.edu.ifrn.wonder.core.dto.AtualizacaoPrestadorRequest;
 import br.edu.ifrn.wonder.core.dto.AtualizacaoStatusPrestadorRequest;
@@ -49,6 +50,7 @@ import br.edu.ifrn.wonder.core.repository.AgendamentoRepository;
 import br.edu.ifrn.wonder.core.repository.CategoriaRepository;
 import br.edu.ifrn.wonder.core.repository.ServicoRepository;
 import br.edu.ifrn.wonder.core.repository.HorarioAtendimentoRepository;
+import br.edu.ifrn.wonder.core.repository.NotificacaoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -67,6 +69,7 @@ public class PrestadorService {
     private final PrestadorFotoService prestadorFotoService;
     private final RabbitProvider rabbitProvider;
     private final KeycloakClient keycloakClient;
+    private final NotificacaoRepository notificacaoRepository;
 
     public PrestadoresAdminPaginaResponse listarAdmin(
             String busca, String status, String dataInicio, String dataFim, String ordem, int inicio, int limite) {
@@ -285,8 +288,20 @@ public class PrestadorService {
         prestador.setAtivo(false);
         prestador.setEnviadoEm(LocalDateTime.now());
         prestador.setMotivoRejeicao(null);
+        registrarNotificacaoEnvio(prestador);
         notificarSolicitacaoAposCommit(prestador);
         return prestador;
+    }
+
+    private void registrarNotificacaoEnvio(Prestador prestador) {
+        UUID usuarioId = prestador.getPerfilUsuario().getKeycloakId();
+        String tipo = "prestador_enviado";
+        String chaveEvento = "prestador:" + prestador.getId() + ":enviado:" + prestador.getEnviadoEm();
+        if (!notificacaoRepository.existsByChaveEventoAndUsuarioKeycloakIdAndTipo(chaveEvento, usuarioId, tipo)) {
+            notificacaoRepository.save(Notificacao.criar(usuarioId, tipo,
+                    "Sua solicitação de prestador foi enviada para análise. Você será avisado quando houver uma decisão.",
+                    chaveEvento));
+        }
     }
 
     private void notificarSolicitacaoAposCommit(Prestador prestador) {
@@ -420,10 +435,41 @@ public class PrestadorService {
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status de prestador inválido");
         }
         if (statusAnterior == StatusPrestador.PENDENTE
-                && (novoStatus == StatusPrestador.ATIVO || novoStatus == StatusPrestador.REJEITADO)) {
-            notificarResultadoAposCommit(prestador);
+                && (novoStatus == StatusPrestador.ATIVO || novoStatus == StatusPrestador.REJEITADO
+                        || novoStatus == StatusPrestador.RASCUNHO)) {
+            registrarNotificacaoResultado(prestador, novoStatus);
+            if (novoStatus == StatusPrestador.ATIVO || novoStatus == StatusPrestador.REJEITADO) {
+                notificarResultadoAposCommit(prestador);
+            }
         }
         return prestador;
+    }
+
+    private void registrarNotificacaoResultado(Prestador prestador, StatusPrestador novoStatus) {
+        UUID usuarioId = prestador.getPerfilUsuario().getKeycloakId();
+        String tipo;
+        String mensagem;
+        switch (novoStatus) {
+            case ATIVO -> {
+                tipo = "prestador_aprovado";
+                mensagem = "Seu cadastro de prestador foi aprovado. Consulte seu e-mail para ver os detalhes.";
+            }
+            case REJEITADO -> {
+                tipo = "prestador_rejeitado";
+                mensagem = "Seu cadastro de prestador foi rejeitado. Motivo: "
+                        + prestador.getMotivoRejeicao() + ". Consulte seu e-mail para ver os detalhes.";
+            }
+            case RASCUNHO -> {
+                tipo = "prestador_correcao";
+                mensagem = "O administrador solicitou correções no seu cadastro de prestador: "
+                        + prestador.getMotivoRejeicao() + ". Revise os dados e reenvie a solicitação.";
+            }
+            default -> throw new IllegalArgumentException("Status sem notificação de resultado: " + novoStatus);
+        }
+        String chaveEvento = "prestador:" + prestador.getId() + ":" + novoStatus + ":" + prestador.getEnviadoEm();
+        if (!notificacaoRepository.existsByChaveEventoAndUsuarioKeycloakIdAndTipo(chaveEvento, usuarioId, tipo)) {
+            notificacaoRepository.save(Notificacao.criar(usuarioId, tipo, mensagem, chaveEvento));
+        }
     }
 
     private void notificarResultadoAposCommit(Prestador prestador) {

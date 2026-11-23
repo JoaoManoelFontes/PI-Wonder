@@ -23,15 +23,18 @@ import br.edu.ifrn.wonder.core.domain.Agendamento;
 import br.edu.ifrn.wonder.core.domain.PerfilUsuario;
 import br.edu.ifrn.wonder.core.domain.Prestador;
 import br.edu.ifrn.wonder.core.domain.StatusAgendamento;
+import br.edu.ifrn.wonder.core.domain.Servico;
 import br.edu.ifrn.wonder.core.dto.AtualizacaoStatusAgendamentoRequest;
 import br.edu.ifrn.wonder.core.repository.AgendamentoRepository;
 import br.edu.ifrn.wonder.core.repository.HistoricoAgendamentoRepository;
+import br.edu.ifrn.wonder.core.messaging.RabbitProvider;
 
 @ExtendWith(MockitoExtension.class)
 class AgendamentoStatusServiceTest {
 
     @Mock private AgendamentoRepository agendamentoRepository;
     @Mock private HistoricoAgendamentoRepository historicoRepository;
+    @Mock private RabbitProvider rabbitProvider;
     @InjectMocks private AgendamentoService service;
 
     @ParameterizedTest
@@ -41,7 +44,9 @@ class AgendamentoStatusServiceTest {
         UUID clienteId = UUID.randomUUID();
         Agendamento agendamento = Agendamento.builder().id(1L)
                 .cliente(new PerfilUsuario(clienteId))
-                .prestador(Prestador.builder().perfilUsuario(new PerfilUsuario(UUID.randomUUID())).build())
+                .prestador(Prestador.builder().nomeEstab("Studio")
+                        .perfilUsuario(new PerfilUsuario(UUID.randomUUID())).build())
+                .servico(Servico.builder().nome("Corte").build())
                 .inicio(agora.plusSeconds(antecedenciaSegundos)).status(StatusAgendamento.PENDENTE).build();
         when(agendamentoRepository.buscarPorIdComBloqueio(1L)).thenReturn(Optional.of(agendamento));
 

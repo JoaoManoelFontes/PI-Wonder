@@ -38,6 +38,9 @@ public class RabbitConfig {
 	public static final String PROVIDER_REQUEST_REVIEWED_QUEUE = "provider_request_reviewed";
 	public static final String PROVIDER_REQUEST_REVIEWED_ROUTING_KEY = "provider_request_reviewed";
 	public static final String PROVIDER_REQUEST_REVIEWED_DLQ = "provider_request_reviewed.dlq";
+	public static final String APPOINTMENT_NOTIFICATION_QUEUE = "appointment.notifications";
+	public static final String APPOINTMENT_NOTIFICATION_ROUTING_KEY = "appointment.notification";
+	public static final String APPOINTMENT_NOTIFICATION_DLQ = "appointment.notifications.dlq";
 
 	@Bean
 	public Queue providerRequestReviewedQueue() {
@@ -55,6 +58,24 @@ public class RabbitConfig {
 			@Qualifier("providerRequestReviewedQueue") Queue fila,
 			DirectExchange wonderExchange) {
 		return BindingBuilder.bind(fila).to(wonderExchange).with(PROVIDER_REQUEST_REVIEWED_ROUTING_KEY);
+	}
+
+	@Bean
+	public Queue appointmentNotificationQueue() {
+		return QueueBuilder.durable(APPOINTMENT_NOTIFICATION_QUEUE)
+				.deadLetterExchange("").deadLetterRoutingKey(APPOINTMENT_NOTIFICATION_DLQ).build();
+	}
+
+	@Bean
+	public Queue appointmentNotificationDeadLetterQueue() {
+		return QueueBuilder.durable(APPOINTMENT_NOTIFICATION_DLQ).build();
+	}
+
+	@Bean
+	public Binding appointmentNotificationBinding(
+			@Qualifier("appointmentNotificationQueue") Queue fila,
+			DirectExchange wonderExchange) {
+		return BindingBuilder.bind(fila).to(wonderExchange).with(APPOINTMENT_NOTIFICATION_ROUTING_KEY);
 	}
 	public static final String PROVIDER_REQUEST_CREATED_QUEUE = "provider_request_created";
 	public static final String PROVIDER_REQUEST_CREATED_ROUTING_KEY = "provider_request_created";
