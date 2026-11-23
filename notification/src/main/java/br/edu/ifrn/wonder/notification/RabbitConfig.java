@@ -14,6 +14,27 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitConfig {
 
 	public static final String EXCHANGE = "wonder.events";
+	public static final String COMPLETED_QUEUE = "wonder.notification.exportacao";
+	public static final String COMPLETED_ROUTING_KEY = "report.generation.completed";
+	public static final String COMPLETED_DLQ = "wonder.notification.exportacao.dlq";
+
+	@Bean
+	public Queue exportacaoConcluidaQueue() {
+		return QueueBuilder.durable(COMPLETED_QUEUE)
+				.deadLetterExchange("").deadLetterRoutingKey(COMPLETED_DLQ).build();
+	}
+
+	@Bean
+	public Queue exportacaoConcluidaDeadLetterQueue() {
+		return QueueBuilder.durable(COMPLETED_DLQ).build();
+	}
+
+	@Bean
+	public Binding exportacaoConcluidaBinding(@Qualifier("exportacaoConcluidaQueue") Queue fila,
+			DirectExchange wonderExchange) {
+		return BindingBuilder.bind(fila).to(wonderExchange).with(COMPLETED_ROUTING_KEY);
+	}
+
 	public static final String PROVIDER_REQUEST_REVIEWED_QUEUE = "provider_request_reviewed";
 	public static final String PROVIDER_REQUEST_REVIEWED_ROUTING_KEY = "provider_request_reviewed";
 	public static final String PROVIDER_REQUEST_REVIEWED_DLQ = "provider_request_reviewed.dlq";

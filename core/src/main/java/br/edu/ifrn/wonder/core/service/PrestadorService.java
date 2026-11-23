@@ -26,6 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
 import br.edu.ifrn.wonder.core.client.KeycloakClient;
 import br.edu.ifrn.wonder.core.dto.PrestadorAdminItemResponse;
 import br.edu.ifrn.wonder.core.dto.PrestadoresAdminPaginaResponse;
+import br.edu.ifrn.wonder.core.dto.PrestadoresAdminExportacaoResponse;
 import br.edu.ifrn.wonder.core.domain.PerfilUsuario;
 import br.edu.ifrn.wonder.core.domain.Categoria;
 import br.edu.ifrn.wonder.core.domain.HorarioAtendimento;
@@ -72,7 +73,24 @@ public class PrestadorService {
 
     public PrestadoresAdminPaginaResponse listarAdmin(
             String busca, String status, String dataInicio, String dataFim, String ordem, int inicio, int limite) {
-        if (inicio < 0 || limite < 1 || limite > 100 || busca.length() > 255
+        if (inicio < 0 || limite < 1 || limite > 100) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Filtros ou paginação inválidos");
+        }
+        var resultado = consultarPrestadoresAdmin(busca, status, dataInicio, dataFim, ordem, inicio, limite);
+        return new PrestadoresAdminPaginaResponse(resultado.itens(), inicio, limite,
+                (long) inicio + limite < resultado.total(), resultado.total());
+    }
+
+    public PrestadoresAdminExportacaoResponse listarAdminParaExportacao(
+            String busca, String status, String dataInicio, String dataFim, String ordem) {
+        return new PrestadoresAdminExportacaoResponse(
+                consultarPrestadoresAdmin(busca, status, dataInicio, dataFim, ordem, null, null).itens());
+    }
+
+    private ResultadoPrestadoresAdmin consultarPrestadoresAdmin(
+            String busca, String status, String dataInicio, String dataFim, String ordem,
+            Integer inicio, Integer limite) {
+        if (busca.length() > 255
                 || !List.of("mais_recentes", "mais_antigos").contains(ordem)
                 || (status != null && !List.of("rascunho", "pendente", "ativo", "rejeitado", "suspenso").contains(status))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Filtros ou paginação inválidos");
@@ -105,27 +123,40 @@ public class PrestadorService {
             List<UUID> responsaveis = texto.isEmpty() ? List.of()
                     : keycloakClient.listarPessoas(token, texto, null).stream()
                             .map(usuario -> UUID.fromString((String) usuario.get("id"))).distinct().toList();
-            var pagina = prestadorRepository.buscarAdministrativos(texto, responsaveis,
-                    status == null ? null : StatusPrestador.valueOf(status.toUpperCase(Locale.ROOT)),
-                    de, ate, ordem.equals("mais_antigos"), inicio, limite);
-            if (token == null && !pagina.isEmpty()) {
+            StatusPrestador statusPrestador = status == null ? null
+                    : StatusPrestador.valueOf(status.toUpperCase(Locale.ROOT));
+            List<Prestador> prestadores;
+            long total;
+            if (inicio == null) {
+                prestadores = prestadorRepository.buscarAdministrativosParaExportacao(texto, responsaveis,
+                        statusPrestador, de, ate, ordem.equals("mais_antigos"));
+                total = prestadores.size();
+            } else {
+                var pagina = prestadorRepository.buscarAdministrativos(texto, responsaveis, statusPrestador,
+                        de, ate, ordem.equals("mais_antigos"), inicio, limite);
+                prestadores = pagina.getContent();
+                total = pagina.getTotalElements();
+            }
+            if (token == null && !prestadores.isEmpty()) {
                 token = keycloakClient.obterToken();
             }
             var nomes = new HashMap<UUID, String>();
             List<PrestadorAdminItemResponse> itens = new ArrayList<>();
-            for (Prestador prestador : pagina) {
+            for (Prestador prestador : prestadores) {
                 UUID usuarioId = prestador.getPerfilUsuario().getKeycloakId();
                 if (!nomes.containsKey(usuarioId)) {
                     nomes.put(usuarioId, buscarNomeResponsavel(token, usuarioId));
                 }
                 itens.add(PrestadorAdminItemResponse.from(prestador, nomes.get(usuarioId)));
             }
-            return new PrestadoresAdminPaginaResponse(itens, inicio, limite,
-                    (long) inicio + limite < pagina.getTotalElements(), pagina.getTotalElements());
+            return new ResultadoPrestadoresAdmin(itens, total);
         } catch (RestClientException | IllegalStateException excecao) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Não foi possível consultar os responsáveis no Keycloak", excecao);
         }
+    }
+
+    private record ResultadoPrestadoresAdmin(List<PrestadorAdminItemResponse> itens, long total) {
     }
 
     private String buscarNomeResponsavel(String token, UUID usuarioId) {

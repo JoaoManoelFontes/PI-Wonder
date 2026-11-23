@@ -1,0 +1,12 @@
+{
+  "exportacaoId": "f7cce9df-37bf-4ed0-8189-3d00eb540a13",
+  "tipo": "USUARIOS",
+  "email": "ana@example.com",
+  "nome": "Ana Silva",
+  "dados": {
+    "usuarios": [
+      {"id":"14128674-d423-4b67-91f5-dca790dc3940","username":"ana","nome":"Ana São José","sobrenome":null,"email":"ana@example.com","ativo":true},
+      {"id":"24128674-d423-4b67-91f5-dca790dc3940","username":"=HYPERLINK","nome":"  +Ana","sobrenome":"Silva","email":null,"ativo":false}
+    ]
+  }
+}

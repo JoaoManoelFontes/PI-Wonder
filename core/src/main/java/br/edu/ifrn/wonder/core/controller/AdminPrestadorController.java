@@ -6,6 +6,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,8 +17,10 @@ import br.edu.ifrn.wonder.core.domain.Prestador;
 import br.edu.ifrn.wonder.core.dto.AtualizacaoStatusPrestadorRequest;
 import br.edu.ifrn.wonder.core.dto.PrestadorAdminDetalheResponse;
 import br.edu.ifrn.wonder.core.dto.PrestadorAdminResumoResponse;
+import br.edu.ifrn.wonder.core.dto.ExportacaoSolicitadaResponse;
 import br.edu.ifrn.wonder.core.security.UsuarioAutenticadoProvider;
 import br.edu.ifrn.wonder.core.service.PrestadorService;
+import br.edu.ifrn.wonder.core.service.ExportacaoService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -29,6 +32,7 @@ public class AdminPrestadorController {
 
     private final PrestadorService prestadorService;
     private final UsuarioAutenticadoProvider usuarioAutenticadoProvider;
+    private final ExportacaoService exportacaoService;
 
     @GetMapping
     PrestadoresAdminPaginaResponse listar(
@@ -41,6 +45,17 @@ public class AdminPrestadorController {
             @RequestParam(name = "limite", defaultValue = "20") int limite) {
         return prestadorService.listarAdmin(busca, status, dataInicio, dataFim,
                 ordem == null ? "mais_recentes" : ordem, inicio, limite);
+    }
+
+    @PostMapping("/exportacoes")
+    ExportacaoSolicitadaResponse prepararExportacao(
+            @RequestParam(name = "busca", defaultValue = "") String busca,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "data_inicio", required = false) String dataInicio,
+            @RequestParam(name = "data_fim", required = false) String dataFim,
+            @RequestParam(name = "ordem", required = false) String ordem) {
+        return exportacaoService.solicitarPrestadores(busca, status, dataInicio, dataFim,
+                ordem == null ? "mais_recentes" : ordem);
     }
 
     @GetMapping("/pendentes")

@@ -6,6 +6,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,9 +16,11 @@ import org.springframework.web.bind.annotation.RestController;
 import br.edu.ifrn.wonder.core.dto.AtualizacaoStatusUsuarioRequest;
 import br.edu.ifrn.wonder.core.dto.AtualizacaoUsuarioAdminRequest;
 import br.edu.ifrn.wonder.core.dto.UsuarioAdminResponse;
+import br.edu.ifrn.wonder.core.dto.ExportacaoSolicitadaResponse;
 import br.edu.ifrn.wonder.core.dto.UsuariosAdminPaginaResponse;
 import br.edu.ifrn.wonder.core.security.UsuarioAutenticadoProvider;
 import br.edu.ifrn.wonder.core.service.UsuarioAdminService;
+import br.edu.ifrn.wonder.core.service.ExportacaoService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -28,6 +31,7 @@ import lombok.RequiredArgsConstructor;
 public class AdminUsuarioController {
     private final UsuarioAdminService usuarioAdminService;
     private final UsuarioAutenticadoProvider usuarioAutenticadoProvider;
+    private final ExportacaoService exportacaoService;
 
     @GetMapping
     UsuariosAdminPaginaResponse listar(@RequestParam(name = "busca", defaultValue = "") String busca,
@@ -35,6 +39,13 @@ public class AdminUsuarioController {
             @RequestParam(name = "inicio", defaultValue = "0") int inicio,
             @RequestParam(name = "limite", defaultValue = "20") int limite) {
         return usuarioAdminService.listar(busca, papel, inicio, limite);
+    }
+
+    @PostMapping("/exportacoes")
+    ExportacaoSolicitadaResponse prepararExportacao(
+            @RequestParam(name = "busca", defaultValue = "") String busca,
+            @RequestParam(name = "papel", required = false) String papel) {
+        return exportacaoService.solicitarUsuarios(busca, papel);
     }
 
     @GetMapping("/{id}")

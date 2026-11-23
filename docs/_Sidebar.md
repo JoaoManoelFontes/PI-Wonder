@@ -5,6 +5,7 @@
 **Requisitos e processo**
 - [Requisitos](Requisitos)
 - [Processo de Software](Processo-de-Software)
+- [Estratégia e Relatório de Testes](Estrategia-e-Relatorio-de-Testes)
 
 **Visões arquiteturais**
 - [Visão Funcional](Visao-Funcional)

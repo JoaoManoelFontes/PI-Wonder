@@ -59,7 +59,13 @@ public class RabbitConfig {
 
 	@Bean
 	public Queue reportGenerationQueue() {
-		return QueueBuilder.durable(REPORT_GENERATION_QUEUE).build();
+		return QueueBuilder.durable(REPORT_GENERATION_QUEUE)
+				.deadLetterExchange("").deadLetterRoutingKey(REPORT_GENERATION_QUEUE + ".dlq").build();
+	}
+
+	@Bean
+	public Queue reportGenerationDeadLetterQueue() {
+		return QueueBuilder.durable(REPORT_GENERATION_QUEUE + ".dlq").build();
 	}
 
 	@Bean

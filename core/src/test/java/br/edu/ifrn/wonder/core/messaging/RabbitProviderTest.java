@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.List;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -17,6 +18,9 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 import br.edu.ifrn.wonder.core.dto.ProviderRequestCreated;
 import br.edu.ifrn.wonder.core.dto.ProviderRequestReviewed;
+import br.edu.ifrn.wonder.core.dto.ExportacaoSolicitada;
+import br.edu.ifrn.wonder.core.dto.ExportacaoSolicitada.Tipo;
+import br.edu.ifrn.wonder.core.dto.UsuariosAdminExportacaoResponse;
 import br.edu.ifrn.wonder.core.dto.AgendamentoNotificacaoEvent;
 import br.edu.ifrn.wonder.core.dto.ProviderRequestReviewed.Resultado;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -28,6 +32,25 @@ class RabbitProviderTest {
 
     private final RabbitTemplate rabbitTemplate = mock(RabbitTemplate.class);
     private final RabbitProvider publicador = new RabbitProvider(rabbitTemplate);
+
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"usuarios", "prestadores", "agendamentos"})
+    void devePreservarOsTresContratosConsumidosPeloWorker(String tipo) throws Exception {
+        var conversor = JsonMapper.builder().build();
+        var caminho = java.nio.file.Path.of("../worker/src/test/resources/contratos/" + tipo + ".json");
+        var esperado = conversor.readTree(java.nio.file.Files.readAllBytes(caminho));
+        Object dados = switch (tipo) {
+            case "usuarios" -> conversor.treeToValue(esperado.get("dados"), UsuariosAdminExportacaoResponse.class);
+            case "prestadores" -> conversor.treeToValue(esperado.get("dados"), br.edu.ifrn.wonder.core.dto.PrestadoresAdminExportacaoResponse.class);
+            default -> conversor.treeToValue(esperado.get("dados"), br.edu.ifrn.wonder.core.dto.DashboardAgendamentosResponse.class);
+        };
+        publicador.sendReportGenerationJob(new ExportacaoSolicitada(
+                UUID.fromString(esperado.get("exportacaoId").asString()), Tipo.valueOf(esperado.get("tipo").asString()),
+                dados, esperado.get("email").asString(), esperado.get("nome").asString()));
+        var captor = ArgumentCaptor.forClass(Message.class);
+        verify(rabbitTemplate).send(eq("wonder.events"), eq("report.generation.requested"), captor.capture());
+        assertThat(conversor.readTree(captor.getValue().getBody())).isEqualTo(esperado);
+    }
 
     @Test
     void devePublicarSolicitacaoComoJsonNaRotaCorreta() {
@@ -46,9 +69,21 @@ class RabbitProviderTest {
     }
 
     @Test
-    void devePreservarPublicacaoDeRelatoriosComoTexto() {
-        publicador.sendReportGenerationJob("relatorio");
-        verify(rabbitTemplate).convertAndSend("wonder.events", "report.generation.requested", "relatorio");
+    void devePublicarComandoDeExportacaoComoJsonNaRotaCorreta() {
+        UUID id = UUID.randomUUID();
+        publicador.sendReportGenerationJob(new ExportacaoSolicitada(
+                id, Tipo.USUARIOS, new UsuariosAdminExportacaoResponse(List.of()), "ana@example.com", "Ana Silva"));
+
+        var captor = ArgumentCaptor.forClass(Message.class);
+        verify(rabbitTemplate).send(eq("wonder.events"), eq("report.generation.requested"), captor.capture());
+        var mensagem = captor.getValue();
+        assertThat(mensagem.getMessageProperties().getContentType()).isEqualTo("application/json");
+        var json = JsonMapper.builder().build().readTree(new String(mensagem.getBody(), StandardCharsets.UTF_8));
+        assertThat(json.path("exportacaoId").asString()).isEqualTo(id.toString());
+        assertThat(json.path("tipo").asString()).isEqualTo("USUARIOS");
+        assertThat(json.path("dados").path("usuarios").isArray()).isTrue();
+        assertThat(json.path("email").asString()).isEqualTo("ana@example.com");
+        assertThat(json.path("nome").asString()).isEqualTo("Ana Silva");
     }
 
     @ParameterizedTest

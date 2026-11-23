@@ -7,10 +7,12 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -24,6 +26,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.amqp.rabbit.core.RabbitAdmin;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -48,7 +52,10 @@ import br.edu.ifrn.wonder.core.repository.AgendamentoRepository;
 import br.edu.ifrn.wonder.core.repository.PerfilUsuarioRepository;
 import br.edu.ifrn.wonder.core.repository.PrestadorRepository;
 import br.edu.ifrn.wonder.core.repository.ServicoRepository;
+import br.edu.ifrn.wonder.core.messaging.RabbitConfig;
 import br.edu.ifrn.wonder.core.service.KeycloakAdminService;
+import br.edu.ifrn.wonder.core.service.UsuarioAdminService;
+import br.edu.ifrn.wonder.core.dto.UsuarioAdminResponse;
 import tools.jackson.databind.json.JsonMapper;
 
 @SpringBootTest
@@ -71,8 +78,12 @@ class AdminDashboardAgendamentosIntegrationTest {
     private ServicoRepository servicoRepository;
     @Autowired
     private AgendamentoRepository agendamentoRepository;
+    @Autowired
+    private RabbitTemplate rabbitTemplate;
     @MockitoBean
     private KeycloakAdminService keycloakAdminService;
+    @MockitoBean
+    private UsuarioAdminService usuarioAdminService;
 
     private Servico servico;
 
@@ -80,6 +91,7 @@ class AdminDashboardAgendamentosIntegrationTest {
     void preparar() {
         // Banco exclusivo do Testcontainers; o rollback restaura o seed.
         jdbcTemplate.execute("TRUNCATE TABLE perfis_usuarios CASCADE");
+        new RabbitAdmin(rabbitTemplate.getConnectionFactory()).purgeQueue(RabbitConfig.REPORT_GENERATION_QUEUE);
         var perfil = perfilUsuarioRepository.save(new PerfilUsuario(UUID.randomUUID()));
         var prestador = prestadorRepository.saveAndFlush(Prestador.builder().perfilUsuario(perfil)
                 .nomeEstab("Studio teste").status(StatusPrestador.ATIVO).ativo(true).build());
@@ -128,6 +140,37 @@ class AdminDashboardAgendamentosIntegrationTest {
             totalDias += totalStatus;
         }
         assertThat(resposta.get("total_agendamentos").asLong()).isEqualTo(totalDias);
+        verifyNoInteractions(keycloakAdminService);
+    }
+
+    @Test
+    void devePrepararExportacaoComOMesmoResultadoAgregadoDaListagem() throws Exception {
+        UUID solicitanteId = UUID.randomUUID();
+        when(usuarioAdminService.detalhar(solicitanteId)).thenReturn(new UsuarioAdminResponse(
+                solicitanteId, "ana", "Ana", "Silva", "ana@example.com", true));
+        criarAgendamento("2026-11-01T09:00", StatusAgendamento.PENDENTE);
+        criarAgendamento("2026-11-02T09:00", StatusAgendamento.CONCLUIDO);
+
+        mockMvc.perform(post("/admin/dashboard/agendamentos/exportacoes")
+                        .with(jwt().jwt(tokenJwt -> tokenJwt.subject(solicitanteId.toString()))
+                                .authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
+                        .param("data_inicio", "2026-11-01").param("data_fim", "2026-11-02"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.exportacao_id").isNotEmpty())
+                .andExpect(jsonPath("$.mensagem").isNotEmpty())
+                .andExpect(jsonPath("$.dias").doesNotExist());
+
+        var mensagem = rabbitTemplate.receive(RabbitConfig.REPORT_GENERATION_QUEUE, 1000);
+        assertThat(mensagem).isNotNull();
+        var evento = jsonMapper.readTree(new String(mensagem.getBody(), StandardCharsets.UTF_8));
+        assertThat(evento.path("tipo").asString()).isEqualTo("AGENDAMENTOS");
+        assertThat(evento.path("email").asString()).isEqualTo("ana@example.com");
+        assertThat(evento.path("nome").asString()).isEqualTo("Ana Silva");
+        assertThat(evento.path("dados").path("data_inicio").asString()).isEqualTo("2026-11-01");
+        assertThat(evento.path("dados").path("data_fim").asString()).isEqualTo("2026-11-02");
+        assertThat(evento.path("dados").path("total_agendamentos").asLong()).isEqualTo(2);
+        assertThat(evento.path("dados").path("dias")).hasSize(2);
+
         verifyNoInteractions(keycloakAdminService);
     }
 

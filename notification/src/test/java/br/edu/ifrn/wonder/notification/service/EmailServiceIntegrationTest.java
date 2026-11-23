@@ -248,6 +248,57 @@ class EmailServiceIntegrationTest {
         assertThat(mensagensRecebidas()).isEmpty();
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"USUARIOS", "PRESTADORES", "AGENDAMENTOS"})
+    void deveConsumirConclusaoDoWorkerEEnviarLinkCsv(String tipo) throws Exception {
+        MessageProperties propriedades = new MessageProperties();
+        propriedades.setContentType("application/json");
+        propriedades.setHeader("__TypeId__", "br.edu.ifrn.wonder.worker.dto.ExportacaoConcluida");
+        String link = "http://localhost:9000/exportacoes/arquivo.csv?X-Amz-Signature=abc%2F123&x=1";
+        String evento = """
+                {"exportacaoId":"f7cce9df-37bf-4ed0-8189-3d00eb540a13","tipo":"%s",
+                 "email":"ana@example.com","nome":"Ana São José","nomeArquivo":"arquivo.csv",
+                 "arquivoUrl":"%s","expiraEm":"2026-11-21T12:00:00Z"}
+                """.formatted(tipo, link);
+        rabbitTemplate.send(RabbitConfig.EXCHANGE, RabbitConfig.COMPLETED_ROUTING_KEY,
+                new Message(evento.getBytes(StandardCharsets.UTF_8), propriedades));
+
+        List<MimeMessage> mensagens = List.of();
+        long limite = System.nanoTime() + Duration.ofSeconds(15).toNanos();
+        while (mensagens.isEmpty() && System.nanoTime() < limite) {
+            mensagens = mensagensRecebidas();
+            if (mensagens.isEmpty()) {
+                Thread.sleep(100);
+            }
+        }
+        assertThat(mensagens).hasSize(1);
+        MimeMessage mensagem = mensagens.getFirst();
+        assertThat(mensagem.getAllRecipients()).hasSize(1);
+        assertThat(mensagem.getAllRecipients()[0].toString()).isEqualTo("ana@example.com");
+        assertThat(mensagem.getSubject()).isEqualTo("Exportação concluída com sucesso no Wonder");
+        assertThat(mensagem.getContent().toString()).contains("Ana São José", "concluída com sucesso",
+                "arquivo.csv", link, "21/11/2026 09:00:00 -03:00");
+    }
+
+    @Test
+    void deveEncaminharConclusaoSemLinkParaDlqSemEnviarEmail() throws Exception {
+        MessageProperties propriedades = new MessageProperties();
+        propriedades.setContentType("application/json");
+        String evento = """
+                {"exportacaoId":"f7cce9df-37bf-4ed0-8189-3d00eb540a13","tipo":"USUARIOS",
+                 "email":"ana@example.com","nome":"Ana","nomeArquivo":"arquivo.csv",
+                 "arquivoUrl":null,"expiraEm":"2026-11-21T12:00:00Z"}
+                """;
+        rabbitTemplate.send(RabbitConfig.EXCHANGE, RabbitConfig.COMPLETED_ROUTING_KEY,
+                new Message(evento.getBytes(StandardCharsets.UTF_8), propriedades));
+
+        Message rejeitada = rabbitTemplate.receive(RabbitConfig.COMPLETED_DLQ, 15000);
+        assertThat(rejeitada).isNotNull();
+        assertThat(new String(rejeitada.getBody(), StandardCharsets.UTF_8)).isEqualTo(evento);
+        assertThat(mensagensRecebidas()).isEmpty();
+
+    }
+
     @Test
     void deveConsumirEventoDeAgendamentoEPersistirAvisosDosParticipantes() throws Exception {
         MessageProperties propriedades = new MessageProperties();

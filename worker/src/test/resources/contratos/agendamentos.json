@@ -1,0 +1,15 @@
+{
+  "exportacaoId": "f7cce9df-37bf-4ed0-8189-3d00eb540a13",
+  "tipo": "AGENDAMENTOS",
+  "email": "ana@example.com",
+  "nome": "Ana Silva",
+  "dados": {
+    "data_inicio":"2026-11-01","data_fim":"2026-11-03","total_agendamentos":1234,"media_por_dia":411.33,
+    "totais_por_status":{"pendente":1200,"confirmado":20,"cancelado":4,"concluido":10},
+    "dias":[
+      {"data":"2026-11-01","total_agendamentos":1224,"totais_por_status":{"pendente":1200,"confirmado":20,"cancelado":4,"concluido":0}},
+      {"data":"2026-11-02","total_agendamentos":0,"totais_por_status":{"pendente":0,"confirmado":0,"cancelado":0,"concluido":0}},
+      {"data":"2026-11-03","total_agendamentos":10,"totais_por_status":{"pendente":0,"confirmado":0,"cancelado":0,"concluido":10}}
+    ]
+  }
+}
