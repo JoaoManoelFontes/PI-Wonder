@@ -10,6 +10,7 @@ import io.minio.GetObjectResponse;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -51,6 +52,17 @@ public class ArmazenamentoFotoService {
                     resposta.readAllBytes(),
                     resposta.headers().get("Content-Type")
             );
+        } catch (Exception exception) {
+            throw indisponibilidade(exception);
+        }
+    }
+
+    public void remover(String nomeObjeto) {
+        try {
+            minioClient.removeObject(RemoveObjectArgs.builder()
+                    .bucket(properties.bucket())
+                    .object(nomeObjeto)
+                    .build());
         } catch (Exception exception) {
             throw indisponibilidade(exception);
         }
