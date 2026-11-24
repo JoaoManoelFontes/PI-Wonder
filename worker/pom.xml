@@ -26,6 +26,8 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
+		<jacoco.minimum.line>0.95</jacoco.minimum.line>
+		<jacoco.minimum.branch>0.75</jacoco.minimum.branch>
 	</properties>
 	<dependencies>
 		<!-- Mesmo suporte JVM exigido pelo SDK MinIO já utilizado no core. -->

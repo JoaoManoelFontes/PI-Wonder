@@ -33,6 +33,17 @@ jobs:
       - name: Build and test
         run: ./mvnw --batch-mode --no-transfer-progress clean verify
 
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jacoco-reports
+          path: |
+            core/target/site/jacoco/
+            notification/target/site/jacoco/
+            worker/target/site/jacoco/
+          if-no-files-found: warn
+
       - name: Prepare Docker Compose environment
         if: github.base_ref == 'main'
         run: cp .env.example .env
