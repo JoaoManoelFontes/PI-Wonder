@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.aMapWithSize;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -50,6 +51,7 @@ import io.minio.ListObjectsArgs;
 import io.minio.MinioClient;
 import io.minio.StatObjectArgs;
 import jakarta.persistence.EntityManager;
+import tools.jackson.databind.json.JsonMapper;
 
 @Testcontainers
 @Import(TestcontainersConfiguration.class)
@@ -88,6 +90,53 @@ class CatalogoPrestadorFotoIntegrationTest {
     private PerfilUsuarioRepository perfilUsuarioRepository;
     @Autowired
     private EntityManager entityManager;
+    @Autowired
+    private JsonMapper jsonMapper;
+
+    @Test
+    void devePublicarGaleriaOpcionalSeparadaDaFotoPrincipal() throws Exception {
+        Prestador prestador = criarPrestador(StatusPrestador.ATIVO);
+        Long id = prestador.getId();
+        UUID dono = prestador.getPerfilUsuario().getKeycloakId();
+        String rotaGaleria = "/catalogo/prestadores/%d/fotos".formatted(id);
+
+        mockMvc.perform(get(rotaGaleria)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+        String corpo = mockMvc.perform(multipart(rotaGaleria).file(foto("image/png", PNG))
+                        .with(jwt().jwt(token -> token.subject(dono.toString()))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.foto_url").exists())
+                .andReturn().getResponse().getContentAsString();
+        Long fotoId = ((Number) jsonMapper.readValue(corpo, java.util.Map.class).get("id")).longValue();
+        mockMvc.perform(get(rotaGaleria)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(fotoId.intValue()))
+                .andExpect(jsonPath("$[0].ordem").value(1));
+        mockMvc.perform(get(rotaGaleria + "/" + fotoId)).andExpect(status().isOk())
+                .andExpect(content().bytes(PNG));
+        assertThat(prestadorRepository.findById(id).orElseThrow().getFotoUrl()).isNull();
+
+        mockMvc.perform(delete(rotaGaleria + "/" + fotoId)
+                        .with(jwt().jwt(token -> token.subject(dono.toString()))))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(get(rotaGaleria)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void deveOcultarGaleriaDePrestadorNaoPublicadoEImpedirAlteracaoPorTerceiros() throws Exception {
+        Prestador prestador = criarPrestador(StatusPrestador.RASCUNHO);
+        String rotaGaleria = "/catalogo/prestadores/%d/fotos".formatted(prestador.getId());
+        UUID dono = prestador.getPerfilUsuario().getKeycloakId();
+        mockMvc.perform(multipart(rotaGaleria).file(foto("image/png", PNG))
+                        .with(jwt().jwt(token -> token.subject(dono.toString()))))
+                .andExpect(status().isCreated());
+        mockMvc.perform(get(rotaGaleria)).andExpect(status().isNotFound());
+        mockMvc.perform(get(rotaGaleria).with(jwt().jwt(token -> token.subject(dono.toString()))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
+        mockMvc.perform(multipart(rotaGaleria).file(foto("image/png", PNG))
+                        .with(jwt().jwt(token -> token.subject(UUID.randomUUID().toString()))))
+                .andExpect(status().isForbidden());
+    }
 
     @Test
     void deveArmazenarSubstituirEServirFotoPublicadaSemAlterarPerfilOuPublicacao() throws Exception {

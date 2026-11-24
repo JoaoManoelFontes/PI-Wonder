@@ -1,5 +1,7 @@
 package br.edu.ifrn.wonder.core.controller;
 
+import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,6 +32,15 @@ public class HorarioPrestadorController {
             @Valid @RequestBody CadastroHorarioAtendimentoRequest dados) {
         return HorarioAtendimentoPublicResponse.from(horarioAtendimentoService.cadastrar(
                 prestadorId, usuarioAutenticadoProvider.getUuidUsuario(), dados));
+    }
+
+    @PostMapping("/lote")
+    @ResponseStatus(HttpStatus.CREATED)
+    List<HorarioAtendimentoPublicResponse> cadastrarLote(@PathVariable("prestadorId") Long prestadorId,
+            @Valid @RequestBody List<@Valid CadastroHorarioAtendimentoRequest> dados) {
+        return horarioAtendimentoService.cadastrarLote(prestadorId,
+                usuarioAutenticadoProvider.getUuidUsuario(), dados).stream()
+                .map(HorarioAtendimentoPublicResponse::from).toList();
     }
 
     @DeleteMapping("/{horarioId}")
