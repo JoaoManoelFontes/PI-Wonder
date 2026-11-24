@@ -68,6 +68,29 @@ class HorarioPrestadorIntegrationTest {
     @Autowired private AgendamentoRepository agendamentoRepository;
     @Autowired private EntityManager entityManager;
 
+    @Test
+    void deveSalvarLoteDeHorariosOuRejeitarTudoQuandoHaSobreposicao() throws Exception {
+        Prestador prestador = criarPrestador(StatusPrestador.ATIVO);
+        String rota = "/catalogo/prestadores/%d/horarios/lote".formatted(prestador.getId());
+        var autenticacao = jwt().jwt(token -> token.subject(prestador.getPerfilUsuario().getKeycloakId().toString()));
+
+        mockMvc.perform(request(HttpMethod.POST, rota).with(autenticacao)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("[{\"dia_semana\":1,\"hora_inicio\":\"08:00\",\"hora_fim\":\"12:00\"},"
+                        + "{\"dia_semana\":1,\"hora_inicio\":\"13:00\",\"hora_fim\":\"17:00\"}]"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.length()").value(2));
+        assertThat(horarioAtendimentoRepository.findByPrestadorIdOrderByDiaSemanaAscHoraInicioAsc(prestador.getId()))
+                .hasSize(2);
+
+        mockMvc.perform(request(HttpMethod.POST, rota).with(autenticacao)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("[{\"dia_semana\":2,\"hora_inicio\":\"08:00\",\"hora_fim\":\"12:00\"},"
+                        + "{\"dia_semana\":2,\"hora_inicio\":\"11:00\",\"hora_fim\":\"13:00\"}]"))
+                .andExpect(status().isConflict());
+        assertThat(horarioAtendimentoRepository.findByPrestadorIdOrderByDiaSemanaAscHoraInicioAsc(prestador.getId()))
+                .hasSize(2);
+    }
+
     @ParameterizedTest
     @EnumSource(StatusPrestador.class)
     void deveCadastrarERemoverHorarioDoDonoSemAlterarPrestador(StatusPrestador situacao) throws Exception {
