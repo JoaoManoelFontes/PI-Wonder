@@ -212,4 +212,54 @@
 		</plugins>
 	</build>
 
+
+
+	<profiles>
+		<profile>
+			<id>pit-status</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.pitest</groupId>
+						<artifactId>pitest-maven</artifactId>
+						<version>1.30.2</version>
+						<configuration>
+							<targetClasses>
+								<param>br.edu.ifrn.wonder.core.service.AgendamentoService</param>
+							</targetClasses>
+							<targetTests>
+								<param>br.edu.ifrn.wonder.core.service.AgendamentoStatusServiceTest</param>
+							</targetTests>
+							<!-- Recorte: atualizarStatus e interpretarStatus; outros fluxos ficam fora desta medição. -->
+							<excludedMethods>
+								<param>criar</param>
+								<param>listar</param>
+								<param>buscarPrestadorAtivoComBloqueio</param>
+								<param>validarHorarioDeAtendimento</param>
+								<param>pertenceAoHorario</param>
+								<param>validarDisponibilidade</param>
+								<param>notificarAposCommit</param>
+								<param>lambda$criar$*</param>
+								<param>lambda$listar$*</param>
+								<param>lambda$buscarPrestadorAtivoComBloqueio$*</param>
+								<param>lambda$validarHorarioDeAtendimento$*</param>
+								<param>lambda$notificarAposCommit$*</param>
+							</excludedMethods>
+							<threads>1</threads>
+							<jvmArgs><param>-Xmx384m</param></jvmArgs>
+							<timestampedReports>false</timestampedReports>
+							<outputFormats><param>HTML</param><param>XML</param></outputFormats>
+						</configuration>
+						<dependencies>
+							<dependency>
+								<groupId>org.pitest</groupId>
+								<artifactId>pitest-junit5-plugin</artifactId>
+								<version>1.2.3</version>
+							</dependency>
+						</dependencies>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 </project>
