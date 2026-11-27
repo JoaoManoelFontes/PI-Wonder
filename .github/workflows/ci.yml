@@ -5,6 +5,11 @@ on:
     branches:
       - develop
       - main
+  push:
+    branches:
+      - develop
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,10 +19,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-test:
-    name: Build and test
+  detect-changes:
+    name: Detect affected modules
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
+
+    outputs:
+      core: ${{ steps.changes.outputs.core }}
+      notification: ${{ steps.changes.outputs.notification }}
+      worker: ${{ steps.changes.outputs.worker }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Detect affected modules
+        id: changes
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash .github/scripts/detect-affected-modules.sh
+
+  test-core:
+    name: Test core
+    needs: detect-changes
+    if: needs.detect-changes.outputs.core == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -30,24 +61,123 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: Build and test
-        run: ./mvnw --batch-mode --no-transfer-progress clean verify
+      - name: Test core
+        run: ./mvnw --batch-mode --no-transfer-progress -pl core verify
 
-      - name: Upload coverage reports
+      - name: Upload core coverage report
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: jacoco-reports
-          path: |
-            core/target/site/jacoco/
-            notification/target/site/jacoco/
-            worker/target/site/jacoco/
+          name: jacoco-core
+          path: core/target/site/jacoco/
           if-no-files-found: warn
 
+  test-notification:
+    name: Test notification
+    needs: detect-changes
+    if: needs.detect-changes.outputs.notification == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Test notification
+        run: ./mvnw --batch-mode --no-transfer-progress -pl notification verify
+
+      - name: Upload notification coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jacoco-notification
+          path: notification/target/site/jacoco/
+          if-no-files-found: warn
+
+  test-worker:
+    name: Test worker
+    needs: detect-changes
+    if: needs.detect-changes.outputs.worker == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Test worker
+        run: ./mvnw --batch-mode --no-transfer-progress -pl worker verify
+
+      - name: Upload worker coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jacoco-worker
+          path: worker/target/site/jacoco/
+          if-no-files-found: warn
+
+  build-docker-images:
+    name: Build Docker images
+    needs: detect-changes
+    if: >-
+      (github.event_name == 'pull_request' && github.base_ref == 'main') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
       - name: Prepare Docker Compose environment
-        if: github.base_ref == 'main'
         run: cp .env.example .env
 
       - name: Build Docker images
-        if: github.base_ref == 'main'
         run: docker compose build
+
+  ci-result:
+    name: CI result
+    if: always()
+    needs:
+      - detect-changes
+      - test-core
+      - test-notification
+      - test-worker
+      - build-docker-images
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Validate CI jobs
+        env:
+          DETECT_RESULT: ${{ needs.detect-changes.result }}
+          CORE_RESULT: ${{ needs.test-core.result }}
+          NOTIFICATION_RESULT: ${{ needs.test-notification.result }}
+          WORKER_RESULT: ${{ needs.test-worker.result }}
+          DOCKER_RESULT: ${{ needs.build-docker-images.result }}
+        run: |
+          for result in \
+            "$DETECT_RESULT" \
+            "$CORE_RESULT" \
+            "$NOTIFICATION_RESULT" \
+            "$WORKER_RESULT" \
+            "$DOCKER_RESULT"
+          do
+            if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+              exit 1
+            fi
+          done

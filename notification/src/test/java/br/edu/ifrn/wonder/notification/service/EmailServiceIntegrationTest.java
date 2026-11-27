@@ -49,7 +49,7 @@ import tools.jackson.databind.json.JsonMapper;
 class EmailServiceIntegrationTest {
 
     @Container
-    static final RabbitMQContainer rabbitmq = new RabbitMQContainer(DockerImageName.parse("rabbitmq:4-alpine"));
+    static final RabbitMQContainer rabbitmq = new RabbitMQContainer(DockerImageName.parse("rabbitmq:3-management"));
 
     @Container
     static final PostgreSQLContainer postgres = new PostgreSQLContainer(DockerImageName.parse("postgres:15"));
